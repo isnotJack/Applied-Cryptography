@@ -7,6 +7,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include "utility.h"
 
 void help(){
     printf("[1] List(int n): lists the latest n available messages in the BBS");
@@ -61,13 +62,11 @@ int main(int argc, char** argv){
         exit(1);
     }
     
+    
     printf("Inserisci un messaggio: ");
     fgets(msg, sizeof(msg), stdin); 
-    len = strlen(msg)+1;
-    lmsg = htons(len);
-    ret = send(sd, (void*) &lmsg, sizeof(uint16_t), 0);
-    ret = send(sd, (void*) msg, len, 0);
 
+    ret=sendLength(msg,sd);
     close(sd);
 
     return 0;
