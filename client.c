@@ -62,6 +62,7 @@ int main(int argc, char** argv){
         exit(1);
     }
     
+    
     printf("Inserisci un messaggio: ");
     fgets(msg, sizeof(msg), stdin); 
 
