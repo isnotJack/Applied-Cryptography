@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/time.h>
+#include "utility.h"
 
 int main(int argc, char** argv){    
     int listener, new_sd,len;
@@ -82,10 +83,7 @@ int main(int argc, char** argv){
                     FD_SET(new_sd, &master);
                     if(new_sd > fdmax){ fdmax = new_sd; } 
                 }else{
-                    ret = recv(i, (void*)&lmsg, sizeof(uint16_t), 0);
-                    len = ntohs(lmsg); 
-                    printf("sono len: %d\n", len);
-                    ret = recv(i, (void*)buffer, len, 0);
+                    ret=recvLenght(buffer,i);
                     printf("questo è il messaggio ricevuto %s",buffer);
                     //close(i);
                     FD_CLR(i, &master); 
