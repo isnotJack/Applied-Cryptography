@@ -1,20 +1,5 @@
 /*gestire la connessione come una funzione, date le richiesti di login e logout*/
-#include <arpa/inet.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <errno.h>        
 #include "utility.h"
-
-int MAX_LENGTH = 1024;
-/*void wait_command(){
-    printf("> ");
-    fflush(stdout);
-}*/
 
 int start(){
     int choice;
@@ -34,33 +19,47 @@ int start(){
             return choice;
         }
     }
-
 }
 
-void registration(char email[],char username[],char password[]){
+void handshake(char * username,int sd){
+    char pubkey[KEY_LENGTH];
+    retrieve_pubkey(username,pubkey);
+    sendMsg("HANDSHAKE",sd);
+    sendMsg(pubkey,sd);
+}
+
+void registration(char email[],char username[],char password[],int sd){
     //inserire credenziali
     printf("Inserisci le tue credenziali\n");
-    printf("email: ");
-    fgets(email, MAX_LENGTH, stdin); // Leggo una riga da tastiera
-    printf("username: ");  
-    fgets(username, MAX_LENGTH, stdin); // Leggo una riga da tastiera
-    printf("password: ");  
-    fgets(password, MAX_LENGTH, stdin); // Leggo una riga da tastiera
-   
+    do{
+        printf("email: ");
+        fgets(email, MAX_LENGTH, stdin); // Leggo una riga da tastiera
+        fflush(stdin);
+    }while(!checkInput(email));
+
+    do{
+        printf("username: "); 
+        fgets(username, US_LENGTH, stdin); // Leggo una riga da tastiera
+        username[strcspn(username, "\n")] = '\0';
+        fflush(stdin);
+    }while(!checkInput(username));
+
+    do{
+        printf("password: ");  
+        fgets(password, MAX_LENGTH, stdin); // Leggo una riga da tastiera
+        fflush(stdin);
+    }while(!checkInput(password));
+
     //generazione chiave pub associata legata allo username
-
-
+        keys_generation(username);
     // mandare handshake
-    //handshake();
+        handshake(username,sd);
     // mandare msg server
     // generare credenziali
     // mandare credenziali cifrate e con firma
     // numero causuale
 }
 
-void handshake(){
-
-}
 
 void help(){
     printf("[1] List(int n): lists the latest n available messages in the BBS");
@@ -91,10 +90,9 @@ int main(int argc, char** argv){
     uint16_t lmsg;
     int clt_port;
     struct sockaddr_in srv_addr;
-    char msg[MAX_LENGTH];
     int var=0;
     char email[MAX_LENGTH];
-    char username[MAX_LENGTH];
+    char username[US_LENGTH];
     char password[MAX_LENGTH];
 
 
@@ -124,15 +122,11 @@ int main(int argc, char** argv){
     }
 
     if(var == 1){
-        registration(email, username, password);
+        registration(email, username, password,sd);
     }else{
         //login();
     }
     
-    printf("Inserisci un messaggio: ");
-    fgets(msg, sizeof(msg), stdin); 
-
-    ret=sendLength(msg,sd);
     close(sd);
 
     return 0;
