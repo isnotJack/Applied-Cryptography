@@ -1,13 +1,4 @@
 /*mettere tutto in inglese*/
-#include <arpa/inet.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <sys/time.h>
 #include "utility.h"
 
 int main(int argc, char** argv){    
@@ -15,7 +6,7 @@ int main(int argc, char** argv){
     int srv_port;
     int ret;
     int addrlen; 
-    char buffer[1024];
+    char buffer[KEY_LENGTH];
     int fdmax; 
     int i;
     uint16_t lmsg; 
@@ -83,8 +74,15 @@ int main(int argc, char** argv){
                     FD_SET(new_sd, &master);
                     if(new_sd > fdmax){ fdmax = new_sd; } 
                 }else{
-                    ret=recvLenght(buffer,i);
+                    int size=recvMsg(buffer,i);
+                    if(strcmp(buffer,"HANDSHAKE")){
+                        recvMsg(buffer,i);
+                        //Ricevuto cert client
+                        //Invio chiave pubblica server
+
+                    }
                     printf("questo è il messaggio ricevuto %s",buffer);
+                    insertFile(buffer,size,i);
                     //close(i);
                     FD_CLR(i, &master); 
                 }
