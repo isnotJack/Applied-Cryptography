@@ -11,13 +11,14 @@
 #include <unistd.h>
 #include <sys/time.h>
 #include <regex.h>
-// Utility Functions to always send and receive the lenght before the message
+
 int MAX_LENGTH = 50;
 int KEY_LENGTH = 1024;
 int PUB_CMD_LENGTH = 129;
 int PRIV_CMD_lENGTH = 75;
 int US_LENGTH = 20;
 
+// Utility Functions to send and receive the lenght before the message
 bool sendMsg(char * msg, int sd){
     int len,lmsg,ret;
     len = strlen(msg)+1;
@@ -64,18 +65,20 @@ EVP_PKEY * retrieve_privkey(char * username){
     }
     FILE* file = fopen(path, "r");
     if(!file) { 
-        printf("Errore nella lettura\n");
-        }
+        printf("Error opening the file\n");
+        exit(1);
+    }
     privkey = PEM_read_PrivateKey(file, NULL, NULL, NULL);
     if(!privkey) { 
-        printf("Errore nella read_PrivKey()\n");
-        }
+        printf("Error reading the private key\n");
+        exit(1);
+    }
     fclose(file);
     return privkey;
 }
 
 
-void retrieve_pubkey(char * username,char * pubkey){
+void retrieve_pubkey(char * username, char * pubkey){
     char path[100];
      if(strcmp(username,"server")==0){
          sprintf(path, "./keys_server/rsa_pubkey_%s.pem",username);
@@ -84,19 +87,21 @@ void retrieve_pubkey(char * username,char * pubkey){
     }
     FILE* file = fopen(path, "r");
     if(!file) { 
-        printf("Errore nella lettura\n");
-        }
+        printf("Error opening the file\n");
+        exit(1);
+    }
     fread(pubkey,1,KEY_LENGTH,file);
 }
 
 
-void insertFile(char *buffer,int size,int i){
+void insertFile(char *buffer,int size, int i){
     char path[100];
     sprintf(path,"./keys_server/keys_retrieved/cert_%d.pem",i);
     FILE* file = fopen(path, "w");
     if(!file) { 
-        printf("Errore nella lettura\n");
-        }
+        printf("Error opening the file\n");
+        exit(1);
+    }
     fwrite(buffer,1,size,file);
 }
 
@@ -108,7 +113,7 @@ bool checkInput(char * input){
 
     regfree(&regex);     
     if (expr != 0){
-        printf("Input non valido\n");
+        printf("Invalid input\n");
         return false;
     }
     return true;

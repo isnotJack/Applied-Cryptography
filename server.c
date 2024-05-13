@@ -15,7 +15,7 @@ int main(int argc, char** argv){
     fd_set read_fds;
 
     if (argc > 2){
-        printf("Parametri non validi: chiusura programma\n");
+        printf("Invalid parameters -> program exit\n");
         exit(1);
     }
     
@@ -27,7 +27,7 @@ int main(int argc, char** argv){
     
     listener = socket(AF_INET, SOCK_STREAM, 0); // creazione socket di ascolto 
     if (listener == -1){
-        perror("Errore nella creazione del socket di ascolto ");
+        printf("Error creating the listening socket\n");
         exit(1);
     }
 
@@ -40,12 +40,12 @@ int main(int argc, char** argv){
 
     ret = bind(listener, (struct sockaddr*)&my_addr, sizeof(my_addr)); // associazione socket ip
     if (ret == -1){
-        perror("Errore nella bind ");
+        printf("bind() error\n");
         exit(1);
     }
     ret = listen(listener, 10); //server in ascolto su socket listener con coda di max 10 client
     if (ret == -1){
-        perror("Errore nella listen ");
+        printf("listen() error\n");
         exit(1);
     }
 
@@ -60,8 +60,8 @@ int main(int argc, char** argv){
         read_fds = master;
         ret = select(fdmax+1, &read_fds, NULL, NULL, NULL);
         if (ret == -1){
-            perror("Errore nella select()");
-            exit(1);
+            printf("select() error\n");
+            continue;
         }
         
         for (i = 0; i <= fdmax; i++){
@@ -69,7 +69,8 @@ int main(int argc, char** argv){
                 if(i == listener){
                     new_sd = accept(listener, (struct sockaddr *) &cl_addr, &addrlen);
                     if (new_sd == -1){
-                        printf("Errore nella creazione della connessione con il device");
+                        printf("Error creating connection with the client\n");
+                        continue;
                     }
                     FD_SET(new_sd, &master);
                     if(new_sd > fdmax){ fdmax = new_sd; } 
@@ -89,6 +90,5 @@ int main(int argc, char** argv){
             }
         }
     }
-
     return 0;
 }

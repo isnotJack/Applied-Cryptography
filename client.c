@@ -4,17 +4,16 @@
 int start(){
     int choice;
     
-    printf("Choose:\n");
+    printf("Select one of the following options:\n");
     printf("[1] Registration\n");
     printf("[2] Login\n");
-
     
     while(1){
         printf("> ");
         scanf("%d", &choice);
         while(getchar() !='\n');
         if(choice != 1 && choice != 2){
-            printf("Scelta non valida\n");
+            printf("Invalid choice, try again.\n");
         }else{
             return choice;
         }
@@ -30,36 +29,37 @@ void handshake(char * username,int sd){
 
 void registration(char email[],char username[],char password[],int sd){
     //inserire credenziali
-    printf("Inserisci le tue credenziali\n");
+    printf("Insert the following parameters\n");
     do{
-        printf("email: ");
-        fgets(email, MAX_LENGTH, stdin); // Leggo una riga da tastiera
+        printf("Email: ");
+        fgets(email, MAX_LENGTH, stdin); 
         email[strcspn(email, "\n")] = '\0';
         fflush(stdin);
     }while(!checkInput(email));
 
     do{
-        printf("username: "); 
-        fgets(username, US_LENGTH, stdin); // Leggo una riga da tastiera
+        printf("Username: "); 
+        fgets(username, US_LENGTH, stdin); 
         username[strcspn(username, "\n")] = '\0';
         fflush(stdin);
     }while(!checkInput(username));
 
     do{
-        printf("password: ");  
-        fgets(password, MAX_LENGTH, stdin); // Leggo una riga da tastiera
+        printf("Password: ");  
+        fgets(password, MAX_LENGTH, stdin); 
         password[strcspn(password, "\n")] = '\0';
         fflush(stdin);
     }while(!checkInput(password));
 
-    //generazione chiave pub associata legata allo username
-        keys_generation(username);
-    // mandare handshake
-        handshake(username,sd);
-    // mandare msg server
-    // generare credenziali
+    // generazione coppia di chiavi associata all'username
+    // questo trucco permette di simulare "offline" il meccanismo dei certificati
+    // è come se si creasse la coppia di chiavi e la chiave pubblica fosse contenuta all'interno di un certificato
+    keys_generation(username);
+    
+    handshake(username,sd);     // esecuzione protocollo di handshake
+
     // mandare credenziali cifrate e con firma
-    // numero causuale
+
 }
 
 
@@ -70,8 +70,8 @@ void help(){
 }
 
 void menu_operation(){
-    printf("Welcome, to interact insert the name of the function and after the parameter");
-    printf("[1] List");
+    printf("Welcome, to interact insert the name of the functions");
+    printf("\n[1] List");
     printf("\n[2] Get");
     printf("\n[3] Add");
     printf("\n[4] Help\n");
@@ -99,7 +99,7 @@ int main(int argc, char** argv){
 
 
     if (argc != 2){
-        printf("Parametri non validi, usa: ./dev <porta>\n");
+        printf("Invalid parameters -> Use ./dev <porta>\n");
         fflush(stdout);
         exit(1);
     }
@@ -110,6 +110,10 @@ int main(int argc, char** argv){
     
     var = start();
     sd = socket(AF_INET,SOCK_STREAM,0);
+    if (sd == -1){
+        printf("Error in the creation of the socket\n");
+        exit(1);
+    }
 
     memset(&srv_addr, 0, sizeof(srv_addr));
     srv_addr.sin_family = AF_INET;
@@ -119,7 +123,7 @@ int main(int argc, char** argv){
     
     ret = connect(sd, (struct sockaddr*)&srv_addr, sizeof(srv_addr));
     if(ret < 0){
-        perror("Errore in fase di connessione: \n");
+        printf("Connection error\n");
         exit(1);
     }
 
