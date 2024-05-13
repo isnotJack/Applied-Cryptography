@@ -34,6 +34,7 @@ void registration(char email[],char username[],char password[],int sd){
     do{
         printf("email: ");
         fgets(email, MAX_LENGTH, stdin); // Leggo una riga da tastiera
+        email[strcspn(email, "\n")] = '\0';
         fflush(stdin);
     }while(!checkInput(email));
 
@@ -47,6 +48,7 @@ void registration(char email[],char username[],char password[],int sd){
     do{
         printf("password: ");  
         fgets(password, MAX_LENGTH, stdin); // Leggo una riga da tastiera
+        password[strcspn(password, "\n")] = '\0';
         fflush(stdin);
     }while(!checkInput(password));
 
