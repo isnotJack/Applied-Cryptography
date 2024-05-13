@@ -102,7 +102,7 @@ void insertFile(char *buffer,int size,int i){
 
 bool checkInput(char * input){
     regex_t regex;     
-    int expr = regcomp(&regex, "^([A-Za-z@.1-9]+)$", REG_EXTENDED);
+    int expr = regcomp(&regex, "^([A-Za-z@.0-9]+)$", REG_EXTENDED);
         // Controlla se l'input soddisfa l'espressione regolare    
     expr = regexec(&regex, input, 0, NULL, 0);    
 
