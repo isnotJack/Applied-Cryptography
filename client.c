@@ -1,6 +1,11 @@
 /*gestire la connessione come una funzione, date le richiesti di login e logout*/
 #include "utility.h"
 
+//GLOBAL FOR SCOPE
+EVP_PKEY * dh_params;
+DH_retrival(dh_params);
+EVP_PKEY_CTX * DH_ctx;
+
 int start(){
     int choice;
     
@@ -20,11 +25,22 @@ int start(){
     }
 }
 
+
+
 void handshake(char * username,int sd){
-    char pubkey[KEY_LENGTH];
-    retrieve_pubkey(username,pubkey);
+    EVP_PKEY * pubkey;
+    EVP_PKEY * serverKey;
+    pubkey=retrieve_pubkey(username);
     sendMsg("HANDSHAKE",sd);
-    sendMsg(pubkey,sd);
+    send_public_key(sd,pubkey);
+    
+    //Chiave pubblica server letta da file del server "keys_server" (BARBINO)
+    serverKey=retrieve_pubkey("server");
+    
+    DH_ctx=DH_PubPriv(dh_params);
+   
+
+
 }
 
 void registration(char email[],char username[],char password[],int sd){
@@ -96,7 +112,6 @@ int main(int argc, char** argv){
     char email[MAX_LENGTH];
     char username[US_LENGTH];
     char password[MAX_LENGTH];
-
 
     if (argc != 2){
         printf("Invalid parameters -> Use ./dev <porta>\n");

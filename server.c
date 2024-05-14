@@ -56,6 +56,11 @@ int main(int argc, char** argv){
     fdmax = listener;               // il maggiore dei descrittori ora è il listener
     addrlen = sizeof(cl_addr);
 
+    keys_generation("server");
+    DH_parameter_generation();
+    EVP_PKEY * dh_params;
+    DH_retrival(dh_params); // Recover of P and G
+
     while (1){
         read_fds = master;
         ret = select(fdmax+1, &read_fds, NULL, NULL, NULL);
@@ -75,15 +80,26 @@ int main(int argc, char** argv){
                     FD_SET(new_sd, &master);
                     if(new_sd > fdmax){ fdmax = new_sd; } 
                 }else{
-                    int size=recvMsg(buffer,i);
-                    if(strcmp(buffer,"HANDSHAKE")){
-                        recvMsg(buffer,i);
+                    recvMsg(buffer,i);
+
+                    if(strcmp(buffer,"HANDSHAKE")==0){
+                        int size=recvMsg(buffer,i);
+                        insertFile(buffer,size,i);
+                        printf("Client certificate received \n");
                         //Ricevuto cert client
                         //Invio chiave pubblica server
 
+                        EVP_PKEY_CTX * DH_ctx;
+                        EVP_PKEY * DH_pubkey;
+                        DH_ctx=DH_PubPriv(dh_params,DH_pubkey);
+                        
+                        EVP_PKEY * priv_key = retrieve_privkey("server");
+
+                        Digital_Signature(priv_key,DH_pubkey);
+
+                        
                     }
-                    printf("questo è il messaggio ricevuto %s",buffer);
-                    insertFile(buffer,size,i);
+                    
                     //close(i);
                     FD_CLR(i, &master); 
                 }
