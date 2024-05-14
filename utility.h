@@ -36,6 +36,42 @@ int recvMsg(char * buffer,int sd){
     return len;
 }
 
+//Generation of P and G for DH 
+void DH_parameter_generation(){
+    char command[MAX_LENGTH];
+    sprintf(command,"openssl dhparam -out dh_param.pem -2 -C 2048");
+    system(command);   
+}
+
+void DH_retrival(EVP_PKEY* dh_params){
+    dh_params = EVP_PKEY_new();
+    EVP_PKEY_set1_DH(dh_params, DH_get_2048_224());
+}
+
+EVP_PKEY_CTX * DH_PubPriv(EVP_PKEY* dh_params,EVP_PKEY * my_prvkey){
+    EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new(dh_params, NULL);
+    my_prvkey = EVP_PKEY_new();
+    EVP_PKEY_keygen_init(ctx);
+    EVP_PKEY_keygen(ctx, &my_prvkey); //Generate both 'a' and 'G^a'
+    return ctx;
+}
+
+void Digital_Signature(EVP_PKEY * priv_key, EVP_PKEY * DH_pubkey){
+    char* alg="sha1";
+    const EVP_MD* md = EVP_get_digestbyname(alg);
+    OpenSSL_add_all_digests();
+    EVP_MD_CTX * ctx;
+    ctx = EVP_MD_CTX_new();
+    EVP_MD_CTX_init(ctx);
+    EVP_SignInit(ctx, md);
+    EVP_SignUpdate(ctx,DH_pubkey, size);
+    char * sign_buffer;
+    unsigned int sign_buffer_size;
+    EVP_SignFinal(ctx,sign_buffer, &sign_buffer_size, priv_key);
+    printf("La firma e' :%s",sign_buffer);
+
+}
+
 void keys_generation(char * username){
     //Generazione chiave privata
     char priv_command[PRIV_CMD_lENGTH];
@@ -77,10 +113,11 @@ EVP_PKEY * retrieve_privkey(char * username){
     return privkey;
 }
 
-
-void retrieve_pubkey(char * username, char * pubkey){
+EVP_PKEY * retrieve_pubkey(char * username){
+    /* Read a public key from a PEM file */
+    EVP_PKEY * pubkey;
     char path[100];
-     if(strcmp(username,"server")==0){
+    if(strcmp(username,"server")==0){
          sprintf(path, "./keys_server/rsa_pubkey_%s.pem",username);
     }else{
         sprintf(path, "./keys_clients/rsa_pubkey_%s.pem",username);
@@ -90,8 +127,29 @@ void retrieve_pubkey(char * username, char * pubkey){
         printf("Error opening the file\n");
         exit(1);
     }
-    fread(pubkey,1,KEY_LENGTH,file);
+    pubkey = PEM_read_PUBKEY(file, NULL, NULL, NULL);
+    if(!pubkey) { 
+        printf("Error reading the public key\n");
+        exit(1);
+    }
+    fclose(file);
+    return pubkey;
 }
+
+// void retrieve_pubkey(char * username, char * pubkey){
+//     char path[100];
+//      if(strcmp(username,"server")==0){
+//          sprintf(path, "./keys_server/rsa_pubkey_%s.pem",username);
+//     }else{
+//         sprintf(path, "./keys_clients/rsa_pubkey_%s.pem",username);
+//     }
+//     FILE* file = fopen(path, "r");
+//     if(!file) { 
+//         printf("Error opening the file\n");
+//         exit(1);
+//     }
+//     fread(pubkey,1,KEY_LENGTH,file);
+// }
 
 
 void insertFile(char *buffer,int size, int i){
@@ -102,7 +160,23 @@ void insertFile(char *buffer,int size, int i){
         printf("Error opening the file\n");
         exit(1);
     }
-    fwrite(buffer,1,size,file);
+    BIO *bio = BIO_new_mem_buf(buffer, size);
+    if (!bio) {
+        // Errore nella creazione del BIO
+        return ;
+    }
+    // Lettura della chiave pubblica dal BIO
+    EVP_PKEY *public_key = PEM_read_bio_PUBKEY(bio, NULL, NULL, NULL);
+    if (!public_key) {
+        // Errore nella lettura della chiave pubblica dal BIO
+        BIO_free(bio); // Liberare la memoria del BIO
+        return ;
+    }
+    // Liberare la memoria del BIO
+    BIO_free(bio);
+
+    PEM_write_PUBKEY(file,public_key);
+    fclose(file);
 }
 
 bool checkInput(char * input){
@@ -117,6 +191,31 @@ bool checkInput(char * input){
         return false;
     }
     return true;
+}
+
+bool send_public_key(int socket, EVP_PKEY *public_key) {
+    BIO *bio = BIO_new(BIO_s_mem()); // Creazione di un BIO in memoria
+    if (!bio) {
+        return 1; // Errore nella creazione del BIO
+    }
+
+    // Scrittura della chiave pubblica nel BIO
+    if (!PEM_write_bio_PUBKEY(bio, public_key)) {
+        BIO_free(bio); // Liberare la memoria del BIO
+        return 1; // Errore nella scrittura della chiave pubblica nel BIO
+    }
+
+    // Ottieni il puntatore al buffer di dati BIO
+    char *buffer_data;
+    long buffer_length = BIO_get_mem_data(bio, &buffer_data);
+
+    // Invia la chiave pubblica sul socket
+    if (!sendMsg(buffer_data,socket)) {
+        BIO_free(bio); // Liberare la memoria del BIO
+        return 1; // Errore nell'invio della chiave pubblica
+    }
+    BIO_free(bio); // Liberare la memoria del BIO
+    return 0; // Invio della chiave pubblica completato con successo
 }
 
 // bool checkOverflow(char * input,int max_dim){
