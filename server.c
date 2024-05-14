@@ -57,6 +57,7 @@ int main(int argc, char** argv){
     addrlen = sizeof(cl_addr);
 
     keys_generation("server");
+
     DH_parameter_generation();
     EVP_PKEY * dh_params;
     DH_retrival(dh_params); // Recover of P and G
@@ -95,7 +96,7 @@ int main(int argc, char** argv){
                         
                         EVP_PKEY * priv_key = retrieve_privkey("server");
 
-                        Digital_Signature(priv_key,DH_pubkey);
+                      //  Digital_Signature(priv_key,DH_pubkey);
 
                         
                     }

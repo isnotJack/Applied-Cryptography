@@ -3,7 +3,6 @@
 
 //GLOBAL FOR SCOPE
 EVP_PKEY * dh_params;
-DH_retrival(dh_params);
 EVP_PKEY_CTX * DH_ctx;
 
 int start(){
@@ -37,7 +36,9 @@ void handshake(char * username,int sd){
     //Chiave pubblica server letta da file del server "keys_server" (BARBINO)
     serverKey=retrieve_pubkey("server");
     
-    DH_ctx=DH_PubPriv(dh_params);
+    //DH_ctx=DH_PubPriv(dh_params);
+
+    EVP_PKEY * priv_key = retrieve_privkey(username);
    
 
 
@@ -121,7 +122,7 @@ int main(int argc, char** argv){
     
     clt_port = atoi(argv[1]);
 
-    // generazione chiave pubblica
+    DH_retrival(dh_params);
     
     var = start();
     sd = socket(AF_INET,SOCK_STREAM,0);
