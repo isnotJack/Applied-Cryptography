@@ -64,7 +64,7 @@ void Digital_Signature(EVP_PKEY * priv_key, EVP_PKEY * DH_pubkey){
     ctx = EVP_MD_CTX_new();
     EVP_MD_CTX_init(ctx);
     EVP_SignInit(ctx, md);
-    EVP_SignUpdate(ctx,DH_pubkey, size);
+    //EVP_SignUpdate(ctx, DH_pubkey, );
     char * sign_buffer;
     unsigned int sign_buffer_size;
     EVP_SignFinal(ctx,sign_buffer, &sign_buffer_size, priv_key);
