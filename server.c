@@ -65,7 +65,7 @@ int main(int argc, char** argv){
 
     DH_parameter_generation();      
     
-    DH_retrival(dh_params);         // Recover p and g
+    //DH_retrival(dh_params);         // Recover p and g
 
     while (1){
         read_fds = master;
@@ -99,16 +99,64 @@ int main(int argc, char** argv){
                         // DH_ctx = DH_PubPriv(dh_params, DH_pubkey);   // generazione parametro privato b e pubblic g^b
                          
                         // Genearation of public/private pair
+                        dh_params = EVP_PKEY_new();
+                        EVP_PKEY_set1_DH(dh_params, DH_get_2048_224());
                         DH_ctx = EVP_PKEY_CTX_new(dh_params, NULL);
                        
                         my_prvkey = NULL;
+                        my_prvkey = EVP_PKEY_new();
                         EVP_PKEY_keygen_init(DH_ctx);
                         EVP_PKEY_keygen(DH_ctx, &my_prvkey);
-                        printf("Private/public pair for DH generated\n");
 
+                        FILE* file2 = fopen("prova.pem", "w");
+                        if(!file2) { 
+                            printf("Error opening the file4\n");
+                            exit(1);
+                        }
+                        if (PEM_write_PUBKEY(file2, my_prvkey) == 0) {
+                            perror("Error writing public key to file.\n");
+                            fclose(file2);
+                            exit(1);
+                        }else{
+                            printf("Successaa\n");
+                        }
+                        EVP_PKEY* my_pubkey = PEM_read_PUBKEY(file2,NULL, NULL, NULL);
+                        fclose(file2);
+                        printf("Private/public pair for DH generated\n");
                         priv_key = retrieve_privkey("server");
                         printf("Prima della firma\n");
-                        Digital_Signature(priv_key, my_prvkey);
+                        //Digital_Signature(priv_key, my_pubkey);
+                        unsigned char* signature;
+                        int signature_len;
+                        signature = malloc(EVP_PKEY_size(priv_key));
+                        EVP_MD_CTX* ctx = EVP_MD_CTX_new();
+                        EVP_SignInit(ctx, EVP_sha256());
+                        //da mettere in una funzione
+                        BIO *bio = BIO_new(BIO_s_mem()); // Creazione di un BIO in memoria
+                        if (!bio) {
+                            return 1 ; // Errore nella creazione del BIO
+                        }
+                        
+                            printf("almeno qui ci arrivo\n");
+
+                        // Scrittura della chiave pubblica nel BIO
+                        if (!PEM_write_bio_PUBKEY(bio, my_pubkey)) {
+                            BIO_free(bio); // Liberare la memoria del BIO
+                            return 1; // Errore nella scrittura della chiave pubblica nel BIO
+                        }
+                        // Ottieni il puntatore al buffer di dati BIO
+                        char *buffer_data;
+                        long buffer_length = BIO_get_mem_data(bio, &buffer_data);
+                        
+                        BIO_free(bio); // Liberare la memoria del BIO
+                        printf("stampa di buffer_length %s: \n", buffer_length );
+                        //fin qui
+
+
+                        EVP_SignUpdate(ctx, (unsigned char*)buffer_data,buffer_length);
+                        EVP_SignFinal(ctx, signature, &signature_len,priv_key);
+                        printf("Firma eseguita %s: \n", signature);
+                        EVP_MD_CTX_free(ctx);
 
                     }
                     

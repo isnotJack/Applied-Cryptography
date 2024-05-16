@@ -12,14 +12,13 @@
 #include <sys/time.h>
 #include <regex.h>
 
+
 int MAX_LENGTH = 50;
 int KEY_LENGTH = 1024;
 int PUB_CMD_LENGTH = 129;
 int PRIV_CMD_lENGTH = 75;
 int US_LENGTH = 20;
 
-EVP_PKEY_CTX* DH_ctx;      // context for public key operations
-EVP_MD_CTX * MD_ctx;       // context for message digest
 
 // Utility Functions to send and receive the lenght before the message
 bool sendMsg(char * msg, int sd){
@@ -51,7 +50,7 @@ void DH_retrival(EVP_PKEY* dh_params){
     EVP_PKEY_set1_DH(dh_params, DH_get_2048_224());
 }
 
-EVP_PKEY_CTX * DH_PubPriv(EVP_PKEY* dh_params, EVP_PKEY * my_prvkey){
+/*EVP_PKEY_CTX * DH_PubPriv(EVP_PKEY* dh_params, EVP_PKEY * my_prvkey){
     printf("QUI\n");
     DH_ctx = EVP_PKEY_CTX_new(dh_params, NULL);
     printf("QUI2\n");
@@ -60,20 +59,41 @@ EVP_PKEY_CTX * DH_PubPriv(EVP_PKEY* dh_params, EVP_PKEY * my_prvkey){
     EVP_PKEY_keygen_init(DH_ctx);
     EVP_PKEY_keygen(DH_ctx, &my_prvkey); //Generate both 'a' and 'G^a'
     return DH_ctx;
-}
+}*/
 
 void Digital_Signature(EVP_PKEY * priv_key, EVP_PKEY * DH_pubkey){
-    char* alg="sha1";
-    const EVP_MD* md = EVP_get_digestbyname(alg);
-    OpenSSL_add_all_digests();
-    MD_ctx = EVP_MD_CTX_new();
-    EVP_MD_CTX_init(MD_ctx);
-    EVP_SignInit(MD_ctx, md);
-    // EVP_SignUpdate(MD_ctx, DH_pubkey, );
-    char * sign_buffer;
-    unsigned int sign_buffer_size;
-    EVP_SignFinal(MD_ctx, sign_buffer, &sign_buffer_size, priv_key);
-    printf("La firma e' :%s",sign_buffer);
+
+    unsigned char* signature;
+    int signature_len;
+    signature = malloc(EVP_PKEY_size(priv_key));
+    EVP_MD_CTX* ctx = EVP_MD_CTX_new();
+    EVP_SignInit(ctx, EVP_sha256());
+    //da mettere in una funzione
+    BIO *bio = BIO_new(BIO_s_mem()); // Creazione di un BIO in memoria
+    if (!bio) {
+        return ; // Errore nella creazione del BIO
+    }
+    
+        printf("almeno qui ci arrivo\n");
+
+    // Scrittura della chiave pubblica nel BIO
+    if (!PEM_write_bio_PUBKEY(bio, DH_pubkey)) {
+        BIO_free(bio); // Liberare la memoria del BIO
+        return ; // Errore nella scrittura della chiave pubblica nel BIO
+    }
+    // Ottieni il puntatore al buffer di dati BIO
+    char *buffer_data;
+    long buffer_length = BIO_get_mem_data(bio, &buffer_data);
+    
+    BIO_free(bio); // Liberare la memoria del BIO
+    printf("stampa di buffer_length %s: \n", buffer_length );
+    //fin qui
+
+
+    EVP_SignUpdate(ctx, (unsigned char*)buffer_data,buffer_length);
+    EVP_SignFinal(ctx, signature, &signature_len,priv_key);
+    printf("Firma eseguita %s: \n", signature);
+    EVP_MD_CTX_free(ctx);
 }
 
 void keys_generation(char * username){
@@ -105,7 +125,7 @@ EVP_PKEY * retrieve_privkey(char * username){
     }
     FILE* file = fopen(path, "r");
     if(!file) { 
-        printf("Error opening the file\n");
+        printf("Error opening the file1\n");
         exit(1);
     }
     privkey = PEM_read_PrivateKey(file, NULL, NULL, NULL);
@@ -128,7 +148,7 @@ EVP_PKEY * retrieve_pubkey(char * username){
     }
     FILE* file = fopen(path, "r");
     if(!file) { 
-        printf("Error opening the file\n");
+        printf("Error opening the file2\n");
         exit(1);
     }
     pubkey = PEM_read_PUBKEY(file, NULL, NULL, NULL);
@@ -161,7 +181,7 @@ void insertFile(char *buffer,int size, int i){
     sprintf(path,"./keys_server/keys_retrieved/cert_%d.pem",i);
     FILE* file = fopen(path, "w");
     if(!file) { 
-        printf("Error opening the file\n");
+        printf("Error opening the file3\n");
         exit(1);
     }
     BIO *bio = BIO_new_mem_buf(buffer, size);
