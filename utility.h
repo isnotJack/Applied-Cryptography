@@ -18,6 +18,9 @@ int PUB_CMD_LENGTH = 129;
 int PRIV_CMD_lENGTH = 75;
 int US_LENGTH = 20;
 
+EVP_PKEY_CTX* DH_ctx;      // context for public key operations
+EVP_MD_CTX * MD_ctx;       // context for message digest
+
 // Utility Functions to send and receive the lenght before the message
 bool sendMsg(char * msg, int sd){
     int len,lmsg,ret;
@@ -48,28 +51,29 @@ void DH_retrival(EVP_PKEY* dh_params){
     EVP_PKEY_set1_DH(dh_params, DH_get_2048_224());
 }
 
-EVP_PKEY_CTX * DH_PubPriv(EVP_PKEY* dh_params,EVP_PKEY * my_prvkey){
-    EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new(dh_params, NULL);
+EVP_PKEY_CTX * DH_PubPriv(EVP_PKEY* dh_params, EVP_PKEY * my_prvkey){
+    printf("QUI\n");
+    DH_ctx = EVP_PKEY_CTX_new(dh_params, NULL);
+    printf("QUI2\n");
     my_prvkey = EVP_PKEY_new();
-    EVP_PKEY_keygen_init(ctx);
-    EVP_PKEY_keygen(ctx, &my_prvkey); //Generate both 'a' and 'G^a'
-    return ctx;
+    printf("QUI3\n");
+    EVP_PKEY_keygen_init(DH_ctx);
+    EVP_PKEY_keygen(DH_ctx, &my_prvkey); //Generate both 'a' and 'G^a'
+    return DH_ctx;
 }
 
 void Digital_Signature(EVP_PKEY * priv_key, EVP_PKEY * DH_pubkey){
     char* alg="sha1";
     const EVP_MD* md = EVP_get_digestbyname(alg);
     OpenSSL_add_all_digests();
-    EVP_MD_CTX * ctx;
-    ctx = EVP_MD_CTX_new();
-    EVP_MD_CTX_init(ctx);
-    EVP_SignInit(ctx, md);
-    //EVP_SignUpdate(ctx, DH_pubkey, );
+    MD_ctx = EVP_MD_CTX_new();
+    EVP_MD_CTX_init(MD_ctx);
+    EVP_SignInit(MD_ctx, md);
+    // EVP_SignUpdate(MD_ctx, DH_pubkey, );
     char * sign_buffer;
     unsigned int sign_buffer_size;
-    EVP_SignFinal(ctx,sign_buffer, &sign_buffer_size, priv_key);
+    EVP_SignFinal(MD_ctx, sign_buffer, &sign_buffer_size, priv_key);
     printf("La firma e' :%s",sign_buffer);
-
 }
 
 void keys_generation(char * username){

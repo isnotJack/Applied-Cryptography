@@ -1,5 +1,10 @@
 /*mettere tutto in inglese*/
 #include "utility.h"
+EVP_PKEY * priv_key;
+// definizione variabili per Diffie-Hellman
+EVP_PKEY * dh_params;
+EVP_PKEY_CTX * DH_ctx;      
+EVP_PKEY* my_prvkey;
 
 int main(int argc, char** argv){    
     int listener, new_sd,len;
@@ -56,11 +61,11 @@ int main(int argc, char** argv){
     fdmax = listener;               // il maggiore dei descrittori ora è il listener
     addrlen = sizeof(cl_addr);
 
-    keys_generation("server");
+    keys_generation("server");      // generazione delle chiavi RSA pubblica e privata usate per la firma digitale
 
-    DH_parameter_generation();
-    EVP_PKEY * dh_params;
-    DH_retrival(dh_params); // Recover of P and G
+    DH_parameter_generation();      
+    
+    DH_retrival(dh_params);         // Recover p and g
 
     while (1){
         read_fds = master;
@@ -84,21 +89,27 @@ int main(int argc, char** argv){
                     recvMsg(buffer,i);
 
                     if(strcmp(buffer,"HANDSHAKE")==0){
-                        int size=recvMsg(buffer,i);
-                        insertFile(buffer,size,i);
+                        // ricezione chiave pubblica del client (certificato)
+                        int size = recvMsg(buffer,i);
+                        insertFile(buffer, size, i);
                         printf("Client certificate received \n");
-                        //Ricevuto cert client
-                        //Invio chiave pubblica server
 
-                        EVP_PKEY_CTX * DH_ctx;
-                        EVP_PKEY * DH_pubkey;
-                        DH_ctx=DH_PubPriv(dh_params,DH_pubkey);
-                        
-                        EVP_PKEY * priv_key = retrieve_privkey("server");
+                        // Invio chiave pubblica server
 
-                      //  Digital_Signature(priv_key,DH_pubkey);
+                        // DH_ctx = DH_PubPriv(dh_params, DH_pubkey);   // generazione parametro privato b e pubblic g^b
+                         
+                        // Genearation of public/private pair
+                        DH_ctx = EVP_PKEY_CTX_new(dh_params, NULL);
+                       
+                        my_prvkey = NULL;
+                        EVP_PKEY_keygen_init(DH_ctx);
+                        EVP_PKEY_keygen(DH_ctx, &my_prvkey);
+                        printf("Private/public pair for DH generated\n");
 
-                        
+                        priv_key = retrieve_privkey("server");
+                        printf("Prima della firma\n");
+                        Digital_Signature(priv_key, my_prvkey);
+
                     }
                     
                     //close(i);

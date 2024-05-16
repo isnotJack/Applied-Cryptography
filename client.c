@@ -2,8 +2,13 @@
 #include "utility.h"
 
 //GLOBAL FOR SCOPE
+EVP_PKEY * pubkey;         // per contenere la chiave pubblica da inviare al server
+EVP_PKEY * serverKey;      // per la chiave pubblica del server (utile per verificare la sua firma)
+EVP_PKEY * priv_key;        // per la chiave privata usata per firmare
+// Variabili per Diffie-Hellman
 EVP_PKEY * dh_params;
 EVP_PKEY_CTX * DH_ctx;
+EVP_PKEY* my_prvkey;
 
 int start(){
     int choice;
@@ -24,24 +29,26 @@ int start(){
     }
 }
 
-
-
 void handshake(char * username,int sd){
-    EVP_PKEY * pubkey;
-    EVP_PKEY * serverKey;
-    pubkey=retrieve_pubkey(username);
+    // EVP_PKEY * DH_pubkey;
+    pubkey = retrieve_pubkey(username);
     sendMsg("HANDSHAKE",sd);
-    send_public_key(sd,pubkey);
+    send_public_key(sd, pubkey);    // invio al server della chiave pubblica RSA
     
     //Chiave pubblica server letta da file del server "keys_server" (BARBINO)
-    serverKey=retrieve_pubkey("server");
+    serverKey = retrieve_pubkey("server");
     
-    //DH_ctx=DH_PubPriv(dh_params);
+    // DH_ctx = DH_PubPriv(dh_params, DH_pubkey);
 
-    EVP_PKEY * priv_key = retrieve_privkey(username);
+    // Genearation of public/private pair
+    DH_ctx = EVP_PKEY_CTX_new(dh_params, NULL);
+    my_prvkey = NULL;
+    EVP_PKEY_keygen_init(DH_ctx);
+    EVP_PKEY_keygen(DH_ctx, &my_prvkey);
+    printf("Private/public pair for DH generated\n");
+
+    priv_key = retrieve_privkey(username);   // chiave per poter firmare il parametro pubblico di DH
    
-
-
 }
 
 void registration(char email[],char username[],char password[],int sd){
@@ -73,12 +80,11 @@ void registration(char email[],char username[],char password[],int sd){
     // è come se si creasse la coppia di chiavi e la chiave pubblica fosse contenuta all'interno di un certificato
     keys_generation(username);
     
-    handshake(username,sd);     // esecuzione protocollo di handshake
+    handshake(username, sd);     // esecuzione protocollo di handshake
 
     // mandare credenziali cifrate e con firma
 
 }
-
 
 void help(){
     printf("[1] List(int n): lists the latest n available messages in the BBS");
