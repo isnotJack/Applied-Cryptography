@@ -93,7 +93,7 @@ int main(int argc, char** argv){
                         EVP_PKEY_CTX * DH_ctx; //--> Context for Diffi Hellman
                         EVP_PKEY* DH_keys; // --> Contains both 'a' and 'G^a'
                         // ricezione chiave pubblica del client (certificato)
-                        int size = recvMsg(buffer,i);
+                        long size = recvMsg(buffer,i);
                         insertFile(buffer, size, i);
                         printf("Client certificate received \n");
 
@@ -109,20 +109,44 @@ int main(int argc, char** argv){
                         unsigned char* signature;
                         signature = malloc(EVP_PKEY_size(priv_key));
                         int signature_length=Digital_Signature(priv_key, DH_keys, signature);
-                        
+
                         EVP_PKEY * DH_client_keys;
-                        EVP_PKEY * C_pub_key=retrieve_pubkey((char *)i);
+                        EVP_PKEY * C_pub_key=retrieve_pubkey("server",i);
 
                         unsigned char * client_signature;
-                        int client_sign_len;
-                        EVP_PKEY * pub_key=retrieve_pubkey("server");
-                        ret=Verify_Signature(DH_keys,pub_key,signature,signature_length);
+                        long client_sign_len;
+                        unsigned char * recBuf;
+                        size=recvMsg(recBuf,i);
+                        client_sign_len=recvMsg(client_signature,i);
+                        printf("Receive 2\n %ld\n",client_sign_len);
 
-                        //ret=Verify_Signature(DH_client_keys,C_pub_key,client_signature,client_sign_len);
+                        printf("Buffer:%s\n, Signature:\n",recBuf);
+                        
+                        BIO *bio = BIO_new_mem_buf(recBuf, size);
+                        if (!bio) {
+                            // Errore nella creazione del BIO
+                             close(i);
+                             continue;
+                        }
+                        // Lettura della chiave pubblica dal BIO
+                        DH_client_keys= PEM_read_bio_PUBKEY(bio, NULL, NULL, NULL);
+                         printf("Dopo Pem Read\n");
+                        if (!DH_client_keys) {
+                            // Errore nella lettura della chiave pubblica dal BIO
+                            BIO_free(bio); // Liberare la memoria del BIO
+                            close(i);
+                            continue;
+                        }
+                        // Liberare la memoria del BIO
+                        BIO_free(bio);
+
+                        printf("Prima delle verifica\n");
+                        ret=Verify_Signature(DH_client_keys,C_pub_key,client_signature,client_sign_len);
                         if(ret!=1){
                             printf("Signature Verification Error \n");
                         }else{
                             printf("Signature Verification Success \n");
+
                         }
 
                     }
