@@ -34,7 +34,8 @@ void handshake(char * username,int sd){
     pubkey = retrieve_pubkey(username);
     sendMsg("HANDSHAKE",sd);
     send_public_key(sd, pubkey);    // invio al server della chiave pubblica RSA
-    
+    printf("Dopo send public key\n");
+
     //Chiave pubblica server letta da file del server "keys_server" (BARBINO)
     serverKey = retrieve_pubkey("server");
     
@@ -128,7 +129,8 @@ int main(int argc, char** argv){
     
     clt_port = atoi(argv[1]);
 
-    DH_retrival(dh_params);
+    dh_params = EVP_PKEY_new();
+    EVP_PKEY_set1_DH(dh_params, DH_get_2048_224());
     
     var = start();
     sd = socket(AF_INET,SOCK_STREAM,0);

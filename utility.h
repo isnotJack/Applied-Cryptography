@@ -45,52 +45,56 @@ void DH_parameter_generation(){
     system(command);   
 }
 
-void DH_retrival(EVP_PKEY* dh_params){
-    dh_params = EVP_PKEY_new();
-    EVP_PKEY_set1_DH(dh_params, DH_get_2048_224());
+
+void DH_PubPriv(EVP_PKEY* dh_params, EVP_PKEY ** my_prvkey,EVP_PKEY_CTX * DH_ctx){
+    EVP_PKEY_keygen_init(DH_ctx);
+    EVP_PKEY_keygen(DH_ctx, my_prvkey); //Generate both 'a' and 'G^a'
+
 }
 
-/*EVP_PKEY_CTX * DH_PubPriv(EVP_PKEY* dh_params, EVP_PKEY * my_prvkey){
-    printf("QUI\n");
-    DH_ctx = EVP_PKEY_CTX_new(dh_params, NULL);
-    printf("QUI2\n");
-    my_prvkey = EVP_PKEY_new();
-    printf("QUI3\n");
-    EVP_PKEY_keygen_init(DH_ctx);
-    EVP_PKEY_keygen(DH_ctx, &my_prvkey); //Generate both 'a' and 'G^a'
-    return DH_ctx;
-}*/
+// long serialize (EVP_PKEY * key,char ** buffer){
+//      BIO *bio = BIO_new(BIO_s_mem()); // Creazione di un BIO in memoria
+//     //da mettere in una funzione
+//     if (!bio) {
+//         return -1; // Errore nella creazione del BIO
+//     }
+//     // Scrittura della chiave pubblica nel BIO
+//     if (!PEM_write_bio_PUBKEY(bio, key)) {
+//         BIO_free(bio); // Liberare la memoria del BIO
+//         perror("Errore sulla PEM_WRITE_BIO \n");
+//         return -1; // Errore nella scrittura della chiave pubblica nel BIO
+//     }
+//     // Ottieni il puntatore al buffer di dati BIO
+//     long buffer_length = BIO_get_mem_data(bio, &buffer);
 
-void Digital_Signature(EVP_PKEY * priv_key, EVP_PKEY * DH_pubkey){
+//     printf("Buffer dentro serialize %p \n", *buffer);
+//     BIO_free(bio); // Liberare la memoria del BIO
+//     return buffer_length;
+// }
 
-    unsigned char* signature;
+void Digital_Signature(EVP_PKEY * priv_key, EVP_PKEY * DH_keys, unsigned char * signature){
+
     int signature_len;
-    signature = malloc(EVP_PKEY_size(priv_key));
     EVP_MD_CTX* ctx = EVP_MD_CTX_new();
     EVP_SignInit(ctx, EVP_sha256());
-    //da mettere in una funzione
+    char * buffer;
     BIO *bio = BIO_new(BIO_s_mem()); // Creazione di un BIO in memoria
+    //da mettere in una funzione
     if (!bio) {
         return ; // Errore nella creazione del BIO
     }
-    
-        printf("almeno qui ci arrivo\n");
-
     // Scrittura della chiave pubblica nel BIO
-    if (!PEM_write_bio_PUBKEY(bio, DH_pubkey)) {
+    if (!PEM_write_bio_PUBKEY(bio, DH_keys)) {
         BIO_free(bio); // Liberare la memoria del BIO
+        perror("Errore sulla PEM_WRITE_BIO \n");
         return ; // Errore nella scrittura della chiave pubblica nel BIO
     }
     // Ottieni il puntatore al buffer di dati BIO
-    char *buffer_data;
-    long buffer_length = BIO_get_mem_data(bio, &buffer_data);
+    long buffer_length = BIO_get_mem_data(bio, &buffer);
     
     BIO_free(bio); // Liberare la memoria del BIO
-    printf("stampa di buffer_length %s: \n", buffer_length );
-    //fin qui
-
-
-    EVP_SignUpdate(ctx, (unsigned char*)buffer_data,buffer_length);
+    printf("Il buffer e' %s \n",buffer);
+    EVP_SignUpdate(ctx, (unsigned char*)buffer,buffer_length);
     EVP_SignFinal(ctx, signature, &signature_len,priv_key);
     printf("Firma eseguita %s: \n", signature);
     EVP_MD_CTX_free(ctx);
@@ -222,17 +226,17 @@ bool send_public_key(int socket, EVP_PKEY *public_key) {
     if (!bio) {
         return 1; // Errore nella creazione del BIO
     }
-
+ 
     // Scrittura della chiave pubblica nel BIO
     if (!PEM_write_bio_PUBKEY(bio, public_key)) {
         BIO_free(bio); // Liberare la memoria del BIO
         return 1; // Errore nella scrittura della chiave pubblica nel BIO
     }
-
+ 
     // Ottieni il puntatore al buffer di dati BIO
     char *buffer_data;
     long buffer_length = BIO_get_mem_data(bio, &buffer_data);
-
+ 
     // Invia la chiave pubblica sul socket
     if (!sendMsg(buffer_data,socket)) {
         BIO_free(bio); // Liberare la memoria del BIO
@@ -241,6 +245,7 @@ bool send_public_key(int socket, EVP_PKEY *public_key) {
     BIO_free(bio); // Liberare la memoria del BIO
     return 0; // Invio della chiave pubblica completato con successo
 }
+
 
 // bool checkOverflow(char * input,int max_dim){
 //     int input_dim=strlen(input)+1;
