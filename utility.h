@@ -22,18 +22,21 @@ int US_LENGTH = 20;
 
 // Utility Functions to send and receive the lenght before the message
 bool sendMsg(char * msg, int sd){
-    int len,lmsg,ret;
+    int ret;
+    long len,lmsg;
     len = strlen(msg)+1;
-    lmsg = htons(len);
-    ret = send(sd, (void*) &lmsg, sizeof(uint16_t), 0);
+    lmsg = htonl(len);
+    ret = send(sd, (void*) &lmsg, sizeof(uint32_t), 0);
     ret = send(sd, (void*) msg, len, 0);
     return ret;
 }
 
-int recvMsg(char * buffer,int sd){
-    int len,lmsg,ret;
-    ret = recv(sd, (void*)&lmsg, sizeof(uint16_t), 0);
-    len = ntohs(lmsg); 
+
+long recvMsg(char * buffer,int sd){
+    int ret;
+    long len,lmsg;
+    ret = recv(sd, (void*)&lmsg, sizeof(uint32_t), 0);
+    len = ntohl(lmsg); 
     ret = recv(sd, (void*)buffer, len, 0);
     return len;
 }
@@ -172,13 +175,16 @@ EVP_PKEY * retrieve_privkey(char * username){
     return privkey;
 }
 
-EVP_PKEY * retrieve_pubkey(char * username){
+EVP_PKEY * retrieve_pubkey(char * username, int sd){
     /* Read a public key from a PEM file */
     EVP_PKEY * pubkey;
     char path[100];
-    if(strcmp(username,"server")==0){
+    if(strcmp(username,"server")==0 && sd<0){
          sprintf(path, "./keys_server/rsa_pubkey_%s.pem",username);
-    }else{
+    }else if(strcmp(username,"server")==0 && sd>=0){
+        sprintf(path, "./keys_server/keys_retrieved/cert_%d.pem",sd);
+    }
+    else{
         sprintf(path, "./keys_clients/rsa_pubkey_%s.pem",username);
     }
     FILE* file = fopen(path, "r");
@@ -267,12 +273,12 @@ bool send_public_key(int socket, EVP_PKEY *public_key) {
     // Ottieni il puntatore al buffer di dati BIO
     char *buffer_data;
     long buffer_length = BIO_get_mem_data(bio, &buffer_data);
- 
+    printf("Buffer lenght %ld\n",buffer_length);
+    long lmsg=htonl(buffer_length);
+    send(socket, (void*) &lmsg, sizeof(uint32_t), 0);
     // Invia la chiave pubblica sul socket
-    if (!sendMsg(buffer_data,socket)) {
-        BIO_free(bio); // Liberare la memoria del BIO
-        return 1; // Errore nell'invio della chiave pubblica
-    }
+    send(socket,(void *) buffer_data,buffer_length,0);
+
     BIO_free(bio); // Liberare la memoria del BIO
     return 0; // Invio della chiave pubblica completato con successo
 }

@@ -4,11 +4,10 @@
 //GLOBAL FOR SCOPE
 EVP_PKEY * pubkey;         // per contenere la chiave pubblica da inviare al server
 EVP_PKEY * serverKey;      // per la chiave pubblica del server (utile per verificare la sua firma)
-EVP_PKEY * priv_key;        // per la chiave privata usata per firmare
 // Variabili per Diffie-Hellman
 EVP_PKEY * dh_params;
-EVP_PKEY_CTX * DH_ctx;
-EVP_PKEY* my_prvkey;
+
+
 
 int start(){
     int choice;
@@ -30,26 +29,34 @@ int start(){
 }
 
 void handshake(char * username,int sd){
-    // EVP_PKEY * DH_pubkey;
-    pubkey = retrieve_pubkey(username);
+    EVP_PKEY_CTX * DH_ctx;
+    EVP_PKEY* DH_keys;
+    EVP_PKEY * priv_key;        // per la chiave privata usata per firmare
+    pubkey = retrieve_pubkey(username,0);
     sendMsg("HANDSHAKE",sd);
     send_public_key(sd, pubkey);    // invio al server della chiave pubblica RSA
     printf("Dopo send public key\n");
 
     //Chiave pubblica server letta da file del server "keys_server" (BARBINO)
-    serverKey = retrieve_pubkey("server");
-    
-    // DH_ctx = DH_PubPriv(dh_params, DH_pubkey);
+    serverKey = retrieve_pubkey("server",-1);
+
 
     // Genearation of public/private pair
     DH_ctx = EVP_PKEY_CTX_new(dh_params, NULL);
-    my_prvkey = NULL;
-    EVP_PKEY_keygen_init(DH_ctx);
-    EVP_PKEY_keygen(DH_ctx, &my_prvkey);
+    DH_keys = NULL;
+    DH_PubPriv(dh_params,&DH_keys,DH_ctx);
     printf("Private/public pair for DH generated\n");
 
     priv_key = retrieve_privkey(username);   // chiave per poter firmare il parametro pubblico di DH
-   
+    unsigned char * signature;
+    signature = malloc(EVP_PKEY_size(priv_key));
+    int signature_lenght=Digital_Signature(priv_key,DH_keys,signature);
+
+        printf("signature len %d\n",signature_lenght);
+
+    send_public_key(sd,DH_keys);
+    sendMsg(signature,sd);
+
 }
 
 void registration(char email[],char username[],char password[],int sd){
