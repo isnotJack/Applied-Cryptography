@@ -108,8 +108,23 @@ int main(int argc, char** argv){
 
                         unsigned char* signature;
                         signature = malloc(EVP_PKEY_size(priv_key));
+                        int signature_length=Digital_Signature(priv_key, DH_keys, signature);
+                        
+                        EVP_PKEY * DH_client_keys;
+                        EVP_PKEY * C_pub_key=retrieve_pubkey((char *)i);
 
-                        Digital_Signature(priv_key, DH_keys, signature);
+                        unsigned char * client_signature;
+                        int client_sign_len;
+                        EVP_PKEY * pub_key=retrieve_pubkey("server");
+                        ret=Verify_Signature(DH_keys,pub_key,signature,signature_length);
+
+                        //ret=Verify_Signature(DH_client_keys,C_pub_key,client_signature,client_sign_len);
+                        if(ret!=1){
+                            printf("Signature Verification Error \n");
+                        }else{
+                            printf("Signature Verification Success \n");
+                        }
+
                     }
                     
                     //close(i);

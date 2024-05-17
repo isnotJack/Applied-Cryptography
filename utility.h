@@ -41,8 +41,13 @@ int recvMsg(char * buffer,int sd){
 //Generation of P and G for DH 
 void DH_parameter_generation(){
     char command[MAX_LENGTH];
+    FILE * file=fopen("dh_param.pem","r");
+    if(file){
+        fclose(file);
+    }else{
     sprintf(command,"openssl dhparam -out dh_param.pem -2 -C 2048");
-    system(command);   
+    system(command);
+    }   
 }
 
 
@@ -71,8 +76,32 @@ void DH_PubPriv(EVP_PKEY* dh_params, EVP_PKEY ** my_prvkey,EVP_PKEY_CTX * DH_ctx
 //     BIO_free(bio); // Liberare la memoria del BIO
 //     return buffer_length;
 // }
+ int Verify_Signature(EVP_PKEY * DH_keys,EVP_PKEY * pubkey, unsigned char * signature, int signature_length){
+     EVP_MD_CTX* VER_ctx = EVP_MD_CTX_new();
+    EVP_VerifyInit(VER_ctx, EVP_sha256());
+    BIO *bio = BIO_new(BIO_s_mem()); // Creazione di un BIO in memoria
+    if (!bio) {
+        return -1; // Errore nella creazione del BIO
+    }
 
-void Digital_Signature(EVP_PKEY * priv_key, EVP_PKEY * DH_keys, unsigned char * signature){
+    // Scrittura della chiave pubblica nel BIO
+    if (!PEM_write_bio_PUBKEY(bio, DH_keys)) {
+        BIO_free(bio); // Liberare la memoria del BIO
+        return -1; // Errore nella scrittura della chiave pubblica nel BIO
+    }
+
+    // Ottieni il puntatore al buffer di dati BIO
+    char *buffer_data;
+    long buffer_length = BIO_get_mem_data(bio, &buffer_data);
+    
+    EVP_VerifyUpdate(VER_ctx, buffer_data, buffer_length);
+    int ret = EVP_VerifyFinal(VER_ctx, signature,signature_length, pubkey);
+    EVP_MD_CTX_free(VER_ctx);
+    BIO_free(bio); 
+    return ret;
+ }
+
+int Digital_Signature(EVP_PKEY * priv_key, EVP_PKEY * DH_keys, unsigned char * signature){
 
     int signature_len;
     EVP_MD_CTX* ctx = EVP_MD_CTX_new();
@@ -81,23 +110,25 @@ void Digital_Signature(EVP_PKEY * priv_key, EVP_PKEY * DH_keys, unsigned char * 
     BIO *bio = BIO_new(BIO_s_mem()); // Creazione di un BIO in memoria
     //da mettere in una funzione
     if (!bio) {
-        return ; // Errore nella creazione del BIO
+        return -1; // Errore nella creazione del BIO
     }
+   
     // Scrittura della chiave pubblica nel BIO
     if (!PEM_write_bio_PUBKEY(bio, DH_keys)) {
         BIO_free(bio); // Liberare la memoria del BIO
-        perror("Errore sulla PEM_WRITE_BIO \n");
-        return ; // Errore nella scrittura della chiave pubblica nel BIO
+        printf("PEM WRITE ERROR \n");
+        return -1; // Errore nella scrittura della chiave pubblica nel BIO
     }
+    
     // Ottieni il puntatore al buffer di dati BIO
     long buffer_length = BIO_get_mem_data(bio, &buffer);
-    
-    BIO_free(bio); // Liberare la memoria del BIO
-    printf("Il buffer e' %s \n",buffer);
+
     EVP_SignUpdate(ctx, (unsigned char*)buffer,buffer_length);
     EVP_SignFinal(ctx, signature, &signature_len,priv_key);
-    printf("Firma eseguita %s: \n", signature);
+    printf("Signature done \n");
     EVP_MD_CTX_free(ctx);
+    BIO_free(bio); // Liberare la memoria del BIO
+    return signature_len;
 }
 
 void keys_generation(char * username){
