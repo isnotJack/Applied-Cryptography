@@ -50,12 +50,79 @@ void handshake(char * username,int sd){
     priv_key = retrieve_privkey(username);   // chiave per poter firmare il parametro pubblico di DH
     unsigned char * signature;
     signature = malloc(EVP_PKEY_size(priv_key));
-    int signature_lenght=Digital_Signature(priv_key,DH_keys,signature);
-
-        printf("signature len %d\n",signature_lenght);
+    int signature_length=Digital_Signature(priv_key,DH_keys,signature);
 
     send_public_key(sd,DH_keys);
-    sendMsg(signature,sd);
+    long lmsg = htonl(signature_length);
+    send(sd, (void*) &lmsg, sizeof(uint32_t), 0);
+    send(sd, (void*) signature, signature_length, 0);
+
+    /////////RICEVO DAL SERVER ///////
+    EVP_PKEY * DH_server_keys;
+    
+    unsigned char * server_signature = malloc(EVP_PKEY_size(serverKey));
+    long server_sign_len;
+    unsigned char * DH_pub_server = malloc(2*KEY_LENGTH);
+    int size=recvMsg(DH_pub_server,sd);
+    if(size==-1){
+        printf("Errore sulla recieve \n");
+        close(sd);
+        exit;
+    }
+    server_sign_len=recvMsg(server_signature,sd);
+     if(server_sign_len==-1){
+        printf("Errore sulla recieve \n");
+        close(sd);
+        exit;
+    }
+
+    BIO *bio = BIO_new_mem_buf(DH_pub_server, size);
+     if (!bio) {
+        // Errore nella creazione del BIO
+            close(sd);
+            exit(1);
+    }
+    // Lettura della chiave pubblica dal BIO
+    DH_server_keys= PEM_read_bio_PUBKEY(bio, NULL, NULL, NULL);
+    if (!DH_server_keys) {
+        // Errore nella lettura della chiave pubblica dal BIO
+        BIO_free(bio); // Liberare la memoria del BIO
+        close(sd);
+        exit(1);
+    }
+
+    BIO_free(bio);
+    int ret=Verify_Signature(DH_server_keys,serverKey,server_signature,server_sign_len);
+    if(ret!=1){
+        printf("Signature Verification Error \n");
+        close(sd);
+        exit(1);
+    }
+    printf("Signature Verification Success \n");
+
+    //DH_server_keys contains G^b
+    EVP_PKEY_CTX* ctx_drv = EVP_PKEY_CTX_new(DH_keys, NULL);
+    EVP_PKEY_derive_init(ctx_drv);
+    EVP_PKEY_derive_set_peer(ctx_drv, DH_server_keys);
+    unsigned char* secret;
+    size_t secretlen;
+    //DERIVING SHARED SECRET LENGTH
+    EVP_PKEY_derive(ctx_drv, NULL, &secretlen);
+   //DERIVING SHARED SECRET
+    secret = (unsigned char*)malloc(secretlen);
+    EVP_PKEY_derive(ctx_drv, secret, &secretlen);
+    EVP_PKEY_CTX_free(ctx_drv);
+
+    //generate first session key-->hash(secret)
+                        
+    unsigned char* session_key1;
+    session_key1 = (unsigned char*)malloc(EVP_MD_size(EVP_sha256()));
+    int digestlen;
+    char nonce_buf[11];
+    digestlen=Hash(session_key1,secret,secretlen);
+
+    recvMsg(nonce_buf,sd);
+
 
 }
 
@@ -161,7 +228,9 @@ int main(int argc, char** argv){
     if(var == 1){
         registration(email, username, password,sd);
     }else{
-        //login();
+        // login(email,username,password);
+        // handshake();
+        
     }
     
     close(sd);

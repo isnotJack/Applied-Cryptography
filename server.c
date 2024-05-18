@@ -4,6 +4,15 @@ EVP_PKEY * priv_key;
 // definizione variabili per Diffie-Hellman
 EVP_PKEY * dh_params;      
 
+struct secret_Params
+{
+    int sd;
+    unsigned char * session_key1;
+    unsigned char * session_key2;
+    unsigned char * nonce;
+    struct secret_Params * next;
+};
+
 
 int main(int argc, char** argv){    
     int listener, new_sd,len;
@@ -13,6 +22,7 @@ int main(int argc, char** argv){
     char buffer[KEY_LENGTH];
     int fdmax; 
     int i;
+    struct secret_Params * sessionParam= NULL;
     uint16_t lmsg; 
     struct sockaddr_in my_addr,cl_addr;
     fd_set master;
@@ -90,6 +100,7 @@ int main(int argc, char** argv){
                     recvMsg(buffer,i);
 
                     if(strcmp(buffer,"HANDSHAKE")==0){
+                        srand(time(NULL));
                         EVP_PKEY_CTX * DH_ctx; //--> Context for Diffi Hellman
                         EVP_PKEY* DH_keys; // --> Contains both 'a' and 'G^a'
                         // ricezione chiave pubblica del client (certificato)
@@ -113,16 +124,13 @@ int main(int argc, char** argv){
                         EVP_PKEY * DH_client_keys;
                         EVP_PKEY * C_pub_key=retrieve_pubkey("server",i);
 
-                        unsigned char * client_signature;
+                        unsigned char * client_signature = malloc(EVP_PKEY_size(C_pub_key));
                         long client_sign_len;
-                        unsigned char * recBuf;
-                        size=recvMsg(recBuf,i);
+                        unsigned char * DH_pub_client = malloc(2*KEY_LENGTH);
+                        size=recvMsg(DH_pub_client,i);
                         client_sign_len=recvMsg(client_signature,i);
-                        printf("Receive 2\n %ld\n",client_sign_len);
-
-                        printf("Buffer:%s\n, Signature:\n",recBuf);
                         
-                        BIO *bio = BIO_new_mem_buf(recBuf, size);
+                        BIO *bio = BIO_new_mem_buf(DH_pub_client, size);
                         if (!bio) {
                             // Errore nella creazione del BIO
                              close(i);
@@ -130,7 +138,6 @@ int main(int argc, char** argv){
                         }
                         // Lettura della chiave pubblica dal BIO
                         DH_client_keys= PEM_read_bio_PUBKEY(bio, NULL, NULL, NULL);
-                         printf("Dopo Pem Read\n");
                         if (!DH_client_keys) {
                             // Errore nella lettura della chiave pubblica dal BIO
                             BIO_free(bio); // Liberare la memoria del BIO
@@ -140,15 +147,64 @@ int main(int argc, char** argv){
                         // Liberare la memoria del BIO
                         BIO_free(bio);
 
-                        printf("Prima delle verifica\n");
                         ret=Verify_Signature(DH_client_keys,C_pub_key,client_signature,client_sign_len);
                         if(ret!=1){
                             printf("Signature Verification Error \n");
-                        }else{
-                            printf("Signature Verification Success \n");
-
+                            close(i);
+                            continue;
                         }
+                        printf("Signature Verification Success \n");
+                        send_public_key(i,DH_keys);
+                        long lmsg = htonl(signature_length);
+                        send(i, (void*) &lmsg, sizeof(uint32_t), 0);
+                        send(i, (void*) signature, signature_length, 0);
 
+                        
+                        //DH_client_keys contains G^a
+                        EVP_PKEY_CTX* ctx_drv = EVP_PKEY_CTX_new(DH_keys, NULL);
+                        EVP_PKEY_derive_init(ctx_drv);
+                        EVP_PKEY_derive_set_peer(ctx_drv, DH_client_keys);
+                        unsigned char* secret;
+                        size_t secretlen;
+                        //DERIVING SHARED SECRET LENGTH
+                        EVP_PKEY_derive(ctx_drv, NULL, &secretlen);
+                        //DERIVING SHARED SECRET
+                        secret = (unsigned char*)malloc(secretlen);
+                        EVP_PKEY_derive(ctx_drv, secret, &secretlen);
+                        EVP_PKEY_CTX_free(ctx_drv);
+
+
+                        char nonce_buf[11];
+                        int nonce=rand();
+                        sprintf(nonce_buf,"%d",nonce);
+
+                        //generate first session key-->hash(secret)
+                        
+                        unsigned char* digest;
+                        int digestlen;
+                        digest = (unsigned char*)malloc(EVP_MD_size(EVP_sha256()));
+
+                        digestlen=Hash(digest,secret,secretlen);
+                        
+                        //send nounce
+                        sendMsg(nonce_buf,i);
+                        
+                        
+                        //generate second session key
+                        struct secret_Params * temp;
+                        temp=malloc(sizeof( struct secret_Params));
+                        temp->nonce=nonce_buf;
+                        temp->sd=i;
+                        temp->session_key1=digest;
+                        temp->session_key2=NULL;
+                        if(sessionParam==NULL){
+                            sessionParam =temp;
+                            sessionParam->next=NULL;
+                        }else {
+                            temp->next=sessionParam;
+                            sessionParam=temp;
+                        }
+                        
                     }
                     
                     //close(i);
