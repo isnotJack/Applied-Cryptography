@@ -36,8 +36,14 @@ long recvMsg(char * buffer,int sd){
     int ret;
     long len,lmsg;
     ret = recv(sd, (void*)&lmsg, sizeof(uint32_t), 0);
+    if(ret==-1){
+        return ret;
+    }
     len = ntohl(lmsg); 
     ret = recv(sd, (void*)buffer, len, 0);
+    if(ret==-1){
+        return ret;
+    }
     return len;
 }
 
@@ -60,6 +66,31 @@ void DH_PubPriv(EVP_PKEY* dh_params, EVP_PKEY ** my_prvkey,EVP_PKEY_CTX * DH_ctx
 
 }
 
+int Hash(unsigned char * digest, unsigned char *msg ,int msg_len){
+    int digestlen;
+    EVP_MD_CTX* ctx;
+    ctx = EVP_MD_CTX_new();
+    /* Hashing (initialization + single update + finalization */
+    EVP_DigestInit(ctx, EVP_sha256());
+    EVP_DigestUpdate(ctx, (unsigned char*)msg, msg_len);
+    EVP_DigestFinal(ctx, digest, &digestlen);
+    /* Context deallocation */
+    EVP_MD_CTX_free(ctx);
+    return digestlen;
+}
+
+// bool deserialize(BIO * bio, EVP_PKEY * DH_client_keys){
+//     // Lettura della chiave pubblica dal BIO
+//     if (!bio) {
+//         return false;
+//     }
+//     DH_client_keys= PEM_read_bio_PUBKEY(bio, NULL, NULL, NULL);
+//     if (!DH_client_keys) {
+//        return false;
+//     }
+//     return true;
+// }
+
 // long serialize (EVP_PKEY * key,char ** buffer){
 //      BIO *bio = BIO_new(BIO_s_mem()); // Creazione di un BIO in memoria
 //     //da mettere in una funzione
@@ -79,6 +110,7 @@ void DH_PubPriv(EVP_PKEY* dh_params, EVP_PKEY ** my_prvkey,EVP_PKEY_CTX * DH_ctx
 //     BIO_free(bio); // Liberare la memoria del BIO
 //     return buffer_length;
 // }
+
  int Verify_Signature(EVP_PKEY * DH_keys,EVP_PKEY * pubkey, unsigned char * signature, int signature_length){
      EVP_MD_CTX* VER_ctx = EVP_MD_CTX_new();
     EVP_VerifyInit(VER_ctx, EVP_sha256());
@@ -273,7 +305,6 @@ bool send_public_key(int socket, EVP_PKEY *public_key) {
     // Ottieni il puntatore al buffer di dati BIO
     char *buffer_data;
     long buffer_length = BIO_get_mem_data(bio, &buffer_data);
-    printf("Buffer lenght %ld\n",buffer_length);
     long lmsg=htonl(buffer_length);
     send(socket, (void*) &lmsg, sizeof(uint32_t), 0);
     // Invia la chiave pubblica sul socket
