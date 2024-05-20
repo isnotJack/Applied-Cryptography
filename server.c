@@ -98,6 +98,7 @@ int main(int argc, char** argv){
                     if(new_sd > fdmax){ fdmax = new_sd; } 
                 }else{
                     recvMsg(buffer,i);
+                    
 
                     if(strcmp(buffer,"HANDSHAKE")==0){
                         srand(time(NULL));
@@ -155,9 +156,10 @@ int main(int argc, char** argv){
                         }
                         printf("Signature Verification Success \n");
                         send_public_key(i,DH_keys);
-                        long lmsg = htonl(signature_length);
-                        send(i, (void*) &lmsg, sizeof(uint32_t), 0);
-                        send(i, (void*) signature, signature_length, 0);
+                        sendMsg(signature,i,signature_length);
+                        // long lmsg = htonl(signature_length);
+                        // send(i, (void*) &lmsg, sizeof(uint32_t), 0);
+                        // send(i, (void*) signature, signature_length, 0);
 
                         
                         //DH_client_keys contains G^a
@@ -187,8 +189,7 @@ int main(int argc, char** argv){
                         digestlen=Hash(digest,secret,secretlen);
                         
                         //send nonce
-                        sendMsg(nonce_buf,i);
-                        
+                        sendMsg(nonce_buf,i,strlen(nonce_buf)+1);
                         //fulfill the data structure for the session parameters of the user
                         struct secret_Params * temp;
                         temp=malloc(sizeof( struct secret_Params));
@@ -203,11 +204,66 @@ int main(int argc, char** argv){
                             temp->next=sessionParam;
                             sessionParam=temp;
                         }
+
+                        //Eliminare b G^b G^ab
+                        //Eliminare a G^a G^b G^ab
+                        free(secret);
+                        free(DH_keys);
+                        free(DH_client_keys);
+                        free(priv_key);
+                        strcpy(buffer,"");
+                    }else if(strcmp(buffer,"REGISTRATION")==0){
+                        EVP_PKEY * C_pub_key=retrieve_pubkey("server",i);
+                        unsigned char * ciphertext = (unsigned char*)malloc(MAX_LENGTH+US_LENGTH+256 + 16); //--> Credenziali cifrate
+                        int cipherlen = recvMsg(ciphertext,i);
+                        unsigned char * client_signature = malloc(EVP_PKEY_size(C_pub_key));
+                        long client_sign_len=recvMsg(client_signature,i);
+
+                        int ret=Verify_Signature_Msg(ciphertext,C_pub_key,client_signature,client_sign_len);
+                        if(ret!=1){
+                            printf("Signature Verification Error \n");
+                            close(i);
+                            continue;
+                        }
+                        printf("Signature Verification Success \n");
+
+                        //Decifro le credenziali
+                        unsigned char * session_key1 = (unsigned char*)malloc(EVP_MD_size(EVP_sha256())); 
+                        //recupero session key
+                        struct secret_Params * temp=sessionParam;
+                        while(temp != NULL){
+                            if(temp->sd==i){
+                                session_key1=temp->session_key1;
+                                break;
+                            }
+                            temp=temp->next;
+                        }
+                        if(temp==NULL){
+                            printf("Session key Not Found \n");
+                            continue;
+                        }
                         
-                    }
-                    
-                    //close(i);
-                    FD_CLR(i, &master); 
+                        unsigned char * plaintext=malloc(MAX_LENGTH + US_LENGTH +256);
+                        int outlen;
+                        int plainlen;
+                        EVP_CIPHER_CTX* ctx;
+                        ctx = EVP_CIPHER_CTX_new();
+                        EVP_DecryptInit(ctx, EVP_aes_256_ecb(), session_key1, NULL);
+                        EVP_DecryptUpdate(ctx, plaintext, &outlen, ciphertext, cipherlen);
+                        plainlen = outlen;
+                        ret = EVP_DecryptFinal(ctx, plaintext + plainlen, &outlen);
+                        if(ret == 0){
+                            printf("Decrypt Error \n");
+                        }
+                        plainlen += outlen;
+                        EVP_CIPHER_CTX_free(ctx);
+                        printf("Plain text %s\n",plaintext);
+
+                        strcpy(buffer,"");
+                    }else{
+                        // close(i);
+                        // FD_CLR(i, &master);
+                    }                
                 }
             }
         }
