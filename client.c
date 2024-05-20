@@ -4,10 +4,8 @@
 //GLOBAL FOR SCOPE
 EVP_PKEY * pubkey;         // per contenere la chiave pubblica da inviare al server
 EVP_PKEY * serverKey;      // per la chiave pubblica del server (utile per verificare la sua firma)
-// Variabili per Diffie-Hellman
+// Parametri Diffie-Hellman
 EVP_PKEY * dh_params;
-
-
 
 int start(){
     int choice;
@@ -40,7 +38,6 @@ void handshake(char * username,int sd){
     //Chiave pubblica server letta da file del server "keys_server" (BARBINO)
     serverKey = retrieve_pubkey("server",-1);
 
-
     // Genearation of public/private pair
     DH_ctx = EVP_PKEY_CTX_new(dh_params, NULL);
     DH_keys = NULL;
@@ -65,13 +62,13 @@ void handshake(char * username,int sd){
     unsigned char * DH_pub_server = malloc(2*KEY_LENGTH);
     int size=recvMsg(DH_pub_server,sd);
     if(size==-1){
-        printf("Errore sulla recieve \n");
+        printf("Receive error \n");
         close(sd);
         exit;
     }
     server_sign_len=recvMsg(server_signature,sd);
      if(server_sign_len==-1){
-        printf("Errore sulla recieve \n");
+        printf("Receive error \n");
         close(sd);
         exit;
     }
@@ -108,19 +105,20 @@ void handshake(char * username,int sd){
     size_t secretlen;
     //DERIVING SHARED SECRET LENGTH
     EVP_PKEY_derive(ctx_drv, NULL, &secretlen);
-   //DERIVING SHARED SECRET
+    //DERIVING SHARED SECRET
     secret = (unsigned char*)malloc(secretlen);
     EVP_PKEY_derive(ctx_drv, secret, &secretlen);
     EVP_PKEY_CTX_free(ctx_drv);
 
     //generate first session key-->hash(secret)
-                        
     unsigned char* session_key1;
     session_key1 = (unsigned char*)malloc(EVP_MD_size(EVP_sha256()));
     int digestlen;
     char nonce_buf[11];
-    digestlen=Hash(session_key1,secret,secretlen);
+    digestlen = Hash(session_key1, secret, secretlen);
 
+    // ricezione del nonce che verrà usato per generare l'altra chiave di sessione
+    // utile solo quando l'handshake è seguto dal login
     recvMsg(nonce_buf,sd);
 
 
