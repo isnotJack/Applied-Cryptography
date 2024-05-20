@@ -7,8 +7,8 @@ EVP_PKEY * dh_params;
 struct secret_Params
 {
     int sd;
-    unsigned char * session_key1;
-    unsigned char * session_key2;
+    unsigned char * session_key1;   // used to encrypt messages
+    unsigned char * session_key2;   // used for message authentication
     unsigned char * nonce;
     struct secret_Params * next;
 };
@@ -186,17 +186,16 @@ int main(int argc, char** argv){
 
                         digestlen=Hash(digest,secret,secretlen);
                         
-                        //send nounce
+                        //send nonce
                         sendMsg(nonce_buf,i);
                         
-                        
-                        //generate second session key
+                        //fulfill the data structure for the session parameters of the user
                         struct secret_Params * temp;
                         temp=malloc(sizeof( struct secret_Params));
-                        temp->nonce=nonce_buf;
+                        temp->nonce = nonce_buf;
                         temp->sd=i;
-                        temp->session_key1=digest;
-                        temp->session_key2=NULL;
+                        temp->session_key1 = digest; 
+                        temp->session_key2 = NULL;
                         if(sessionParam==NULL){
                             sessionParam =temp;
                             sessionParam->next=NULL;
