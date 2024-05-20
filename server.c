@@ -13,6 +13,14 @@ struct secret_Params
     struct secret_Params * next;
 };
 
+struct client {
+    char *username;
+    char *email ;
+    unsigned char * pswdHash;
+    struct client * next;
+};
+
+
 
 int main(int argc, char** argv){    
     int listener, new_sd,len;
@@ -23,6 +31,7 @@ int main(int argc, char** argv){
     int fdmax; 
     int i;
     struct secret_Params * sessionParam= NULL;
+    struct client * users = NULL;
     uint16_t lmsg; 
     struct sockaddr_in my_addr,cl_addr;
     fd_set master;
@@ -117,6 +126,7 @@ int main(int argc, char** argv){
                         DH_PubPriv(dh_params, &DH_keys,DH_ctx);   // generazione parametro privato b e pubblic g^b
                         printf("Private/public pair for DH generated\n");
                         priv_key = retrieve_privkey("server");
+                        EVP_PKEY_CTX_free(DH_ctx);
 
                         unsigned char* signature;
                         signature = malloc(EVP_PKEY_size(priv_key));
@@ -157,10 +167,7 @@ int main(int argc, char** argv){
                         printf("Signature Verification Success \n");
                         send_public_key(i,DH_keys);
                         sendMsg(signature,i,signature_length);
-                        // long lmsg = htonl(signature_length);
-                        // send(i, (void*) &lmsg, sizeof(uint32_t), 0);
-                        // send(i, (void*) signature, signature_length, 0);
-
+                        
                         
                         //DH_client_keys contains G^a
                         EVP_PKEY_CTX* ctx_drv = EVP_PKEY_CTX_new(DH_keys, NULL);
@@ -208,14 +215,17 @@ int main(int argc, char** argv){
                         //Eliminare b G^b G^ab
                         //Eliminare a G^a G^b G^ab
                         free(secret);
-                        free(DH_keys);
-                        free(DH_client_keys);
-                        free(priv_key);
+                        EVP_PKEY_free(DH_keys);
+                        EVP_PKEY_free(DH_client_keys);
+                        EVP_PKEY_free(priv_key);
+                        free(signature);
+                        free(client_signature); 
                         strcpy(buffer,"");
                     }else if(strcmp(buffer,"REGISTRATION")==0){
                         EVP_PKEY * C_pub_key=retrieve_pubkey("server",i);
                         unsigned char * ciphertext = (unsigned char*)malloc(MAX_LENGTH+US_LENGTH+256 + 16); //--> Credenziali cifrate
                         int cipherlen = recvMsg(ciphertext,i);
+                        
                         unsigned char * client_signature = malloc(EVP_PKEY_size(C_pub_key));
                         long client_sign_len=recvMsg(client_signature,i);
 
@@ -242,7 +252,6 @@ int main(int argc, char** argv){
                             printf("Session key Not Found \n");
                             continue;
                         }
-                        
                         unsigned char * plaintext=malloc(MAX_LENGTH + US_LENGTH +256);
                         int outlen;
                         int plainlen;
@@ -254,11 +263,65 @@ int main(int argc, char** argv){
                         ret = EVP_DecryptFinal(ctx, plaintext + plainlen, &outlen);
                         if(ret == 0){
                             printf("Decrypt Error \n");
+                        }else{
+                         printf("Correct Decryption\n");
                         }
                         plainlen += outlen;
                         EVP_CIPHER_CTX_free(ctx);
-                        printf("Plain text %s\n",plaintext);
+                        
+                        char username [US_LENGTH];
+                        char email [MAX_LENGTH];
+                        unsigned char pswd[256];
+                        //parse del plaintext 
+                        sscanf(plaintext,"%s %s %s",username,email,pswd);
+                       printf("Prima di Ricerca\n");
+                        //ricerca
+                        struct client * app=users;
+                        while(app!=NULL){
+                            if(strcmp(app->username,username)==0 || strcmp(app->pswdHash,pswd)==0){
+                                printf("Registration Failed \n Credential already used \n");
+                                char msg[]="FAILED\0";
+                                sendMsg(msg,i,strlen(msg));
+                                break;
+                            }
+                            app=app->next;
+                        }
+                        printf("Prima di App\n");
+                        if(app == NULL){
+                            app=malloc(sizeof(struct client));
+                            app->pswdHash=pswd;
+                            app->username=username;
+                            app->email=email;
+                            
+                            if(users == NULL){
+                                app->next=NULL;
+                            }else{
+                                app->next=users;
+                            }
+                            users=app;
+                            printf("Prima di Challenge\n");
+                            char msg[]="REGOK\0";
+                            sendMsg(msg,i,strlen(msg));
+                            
+                            char path [US_LENGTH+15];
+                            sprintf(path,"CHALLENGE_%s.txt",username);
+                            FILE * file=fopen(path,"w");
+                            int challenge=rand();
+                            fwrite(&challenge,1,sizeof(char *),file);
+                           
+                            printf("Dopo fclose\n");
+                            char chall_recv[11];
+                            int chall_resp;
+                            recvMsg(chall_recv,i);
+                            sscanf(chall_recv,"%d",&chall_resp);
+                            if(challenge == chall_resp)
+                                printf("YEEEEEEEE\n");
+                            remove(path);
+                            fclose(file);
+                        }
 
+                        //CHALLENGE FOR USERNAME
+                       
                         strcpy(buffer,"");
                     }else{
                         // close(i);
