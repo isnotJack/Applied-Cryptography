@@ -113,8 +113,7 @@ void handshake(char * username,int sd,unsigned char* session_key1,int digestlen,
     EVP_PKEY_CTX_free(ctx_drv);
 
     //generate first session key-->hash(secret)
-    
-    session_key1 = (unsigned char*)malloc(EVP_MD_size(EVP_sha256()));
+
     
     digestlen = Hash(session_key1, secret, secretlen);
 
@@ -158,7 +157,7 @@ void registration(char email[],char username[],char password[],int sd){
     // questo trucco permette di simulare "offline" il meccanismo dei certificati
     // è come se si creasse la coppia di chiavi e la chiave pubblica fosse contenuta all'interno di un certificato
     keys_generation(username);
-    unsigned char * session_key1;
+    unsigned char * session_key1 = (unsigned char*)malloc(EVP_MD_size(EVP_sha256()));
     int digestlen;
     char nonce_buf[11];
     handshake(username, sd,session_key1,digestlen,nonce_buf);     // esecuzione protocollo di handshake
@@ -169,8 +168,6 @@ void registration(char email[],char username[],char password[],int sd){
     unsigned char sendBuffer[MAX_LENGTH +US_LENGTH+256];
     sprintf(sendBuffer,"%s %s %s",username,email,pswdHash);
     
-    printf("Send BUffer clietn %s\n",sendBuffer);
-
     EVP_PKEY * priv_key=retrieve_privkey(username);
     unsigned char * ciphertext = (unsigned char*)malloc(sizeof(sendBuffer) + 16); //--> Credenziali cifrate
     int cipherlen;
@@ -192,12 +189,29 @@ void registration(char email[],char username[],char password[],int sd){
     sendMsg("REGISTRATION",sd,13);
     sendMsg(ciphertext,sd,cipherlen);
     sendMsg(signature,sd,signature_length);
-
-   
-    // // long lmsg = htonl(signature_length);
-    // // send(sd, (void*) &lmsg, sizeof(uint32_t), 0);
-    // // send(sd, (void*) signature, signature_length, 0);
-
+    char temp_buffer[20];
+    recvMsg(temp_buffer,sd);
+    if(strcmp(temp_buffer,"FAILED\0")==0){
+        printf("Registration failed\n Credential Already Used\n");
+    }else{
+         char path [US_LENGTH+15];
+        sprintf(path,"CHALLENGE_%s.txt",username);
+        int challenge;
+        FILE * file =fopen(path,"r");
+        fread(&challenge,1,sizeof(int),file);
+        fclose(file);
+        char sendChall[11];
+        sprintf(sendChall,"%d",challenge);
+        sendMsg(sendChall,sd,strlen(sendChall));
+        printf("Registration Completed\n");
+    }
+    int var=start();
+    if(var == 1){
+        registration(email, username, password,sd);
+        }else{
+            // login(email,username,password);
+            // handshake();   
+        }
 }
 
 void help(){
