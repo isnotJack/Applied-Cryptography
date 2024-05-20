@@ -26,12 +26,12 @@ int start(){
     }
 }
 
-void handshake(char * username,int sd){
+void handshake(char * username,int sd,unsigned char* session_key1,int digestlen,char * nonce_buf){
     EVP_PKEY_CTX * DH_ctx;
     EVP_PKEY* DH_keys;
     EVP_PKEY * priv_key;        // per la chiave privata usata per firmare
     pubkey = retrieve_pubkey(username,0);
-    sendMsg("HANDSHAKE",sd);
+    sendMsg("HANDSHAKE",sd,10);
     send_public_key(sd, pubkey);    // invio al server della chiave pubblica RSA
     printf("Dopo send public key\n");
 
@@ -50,9 +50,11 @@ void handshake(char * username,int sd){
     int signature_length=Digital_Signature(priv_key,DH_keys,signature);
 
     send_public_key(sd,DH_keys);
-    long lmsg = htonl(signature_length);
-    send(sd, (void*) &lmsg, sizeof(uint32_t), 0);
-    send(sd, (void*) signature, signature_length, 0);
+    sendMsg(signature,sd,signature_length);
+
+    // long lmsg = htonl(signature_length);
+    // send(sd, (void*) &lmsg, sizeof(uint32_t), 0);
+    // send(sd, (void*) signature, signature_length, 0);
 
     /////////RICEVO DAL SERVER ///////
     EVP_PKEY * DH_server_keys;
@@ -106,23 +108,27 @@ void handshake(char * username,int sd){
     //DERIVING SHARED SECRET LENGTH
     EVP_PKEY_derive(ctx_drv, NULL, &secretlen);
     //DERIVING SHARED SECRET
-    secret = (unsigned char*)malloc(secretlen);
+    secret = (unsigned char*)malloc(secretlen); // --> G^ab
     EVP_PKEY_derive(ctx_drv, secret, &secretlen);
     EVP_PKEY_CTX_free(ctx_drv);
 
     //generate first session key-->hash(secret)
-    unsigned char* session_key1;
+    
     session_key1 = (unsigned char*)malloc(EVP_MD_size(EVP_sha256()));
-    int digestlen;
-    char nonce_buf[11];
+    
     digestlen = Hash(session_key1, secret, secretlen);
 
     // ricezione del nonce che verrà usato per generare l'altra chiave di sessione
     // utile solo quando l'handshake è seguto dal login
     recvMsg(nonce_buf,sd);
 
-
+    //Eliminare a G^a G^b G^ab
+    free(secret);
+    free(DH_keys);
+    free(DH_server_keys);
+    free(priv_key);
 }
+
 
 void registration(char email[],char username[],char password[],int sd){
     //inserire credenziali
@@ -152,10 +158,45 @@ void registration(char email[],char username[],char password[],int sd){
     // questo trucco permette di simulare "offline" il meccanismo dei certificati
     // è come se si creasse la coppia di chiavi e la chiave pubblica fosse contenuta all'interno di un certificato
     keys_generation(username);
-    
-    handshake(username, sd);     // esecuzione protocollo di handshake
-
+    unsigned char * session_key1;
+    int digestlen;
+    char nonce_buf[11];
+    handshake(username, sd,session_key1,digestlen,nonce_buf);     // esecuzione protocollo di handshake
     // mandare credenziali cifrate e con firma
+    unsigned char * pswdHash;
+    pswdHash = (unsigned char*)malloc(EVP_MD_size(EVP_sha256()));
+    int pswdHashLen=Hash(pswdHash,password,strlen(password));
+    unsigned char sendBuffer[MAX_LENGTH +US_LENGTH+256];
+    sprintf(sendBuffer,"%s %s %s",username,email,pswdHash);
+    
+    printf("Send BUffer clietn %s\n",sendBuffer);
+
+    EVP_PKEY * priv_key=retrieve_privkey(username);
+    unsigned char * ciphertext = (unsigned char*)malloc(sizeof(sendBuffer) + 16); //--> Credenziali cifrate
+    int cipherlen;
+    int outlen;
+    //Cifro send buffer con k1
+    EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
+    EVP_EncryptInit(ctx, EVP_aes_256_ecb(), session_key1, NULL);
+    EVP_EncryptUpdate(ctx, ciphertext, &outlen,(unsigned char*)sendBuffer, sizeof(sendBuffer));
+    cipherlen = outlen;
+    EVP_EncryptFinal(ctx, ciphertext + cipherlen, &outlen);
+    cipherlen += outlen;
+    EVP_CIPHER_CTX_free(ctx);
+
+    //firmo send buffer cifrato
+    unsigned char * signature=malloc(EVP_PKEY_size(priv_key));
+    int signature_length=Digital_Signature_Msg(priv_key,ciphertext,signature);
+    
+    //invio credenziali cifrate + firma digitale
+    sendMsg("REGISTRATION",sd,13);
+    sendMsg(ciphertext,sd,cipherlen);
+    sendMsg(signature,sd,signature_length);
+
+   
+    // // long lmsg = htonl(signature_length);
+    // // send(sd, (void*) &lmsg, sizeof(uint32_t), 0);
+    // // send(sd, (void*) signature, signature_length, 0);
 
 }
 
@@ -225,6 +266,7 @@ int main(int argc, char** argv){
 
     if(var == 1){
         registration(email, username, password,sd);
+
     }else{
         // login(email,username,password);
         // handshake();

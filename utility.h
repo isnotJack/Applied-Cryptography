@@ -21,10 +21,9 @@ int US_LENGTH = 20;
 
 
 // Utility Functions to send and receive the lenght before the message
-bool sendMsg(char * msg, int sd){
+bool sendMsg(char * msg, int sd,long len){
     int ret;
-    long len,lmsg;
-    len = strlen(msg)+1;
+    long lmsg;
     lmsg = htonl(len);
     ret = send(sd, (void*) &lmsg, sizeof(uint32_t), 0);
     ret = send(sd, (void*) msg, len, 0);
@@ -166,6 +165,26 @@ int Digital_Signature(EVP_PKEY * priv_key, EVP_PKEY * DH_keys, unsigned char * s
     return signature_len;
 }
 
+int Digital_Signature_Msg(EVP_PKEY * priv_key, unsigned char * msg, unsigned char * signature){
+    int signature_len;
+    EVP_MD_CTX* ctx = EVP_MD_CTX_new();
+    EVP_SignInit(ctx, EVP_sha256());
+    // Ottieni il puntatore al buffer di dati BIO
+    EVP_SignUpdate(ctx, (unsigned char*)msg,sizeof(msg));
+    EVP_SignFinal(ctx, signature, &signature_len,priv_key);
+    printf("Signature done \n");
+    EVP_MD_CTX_free(ctx);
+    return signature_len;
+}
+int Verify_Signature_Msg(unsigned char * ciphertext,EVP_PKEY * pubkey, unsigned char * signature, int signature_length){
+    EVP_MD_CTX* VER_ctx = EVP_MD_CTX_new();
+    EVP_VerifyInit(VER_ctx, EVP_sha256());
+    EVP_VerifyUpdate(VER_ctx, ciphertext, sizeof(ciphertext));
+    int ret = EVP_VerifyFinal(VER_ctx, signature,signature_length, pubkey);
+    EVP_MD_CTX_free(VER_ctx);
+    return ret;
+ }
+
 void keys_generation(char * username){
     //Generazione chiave privata
     char priv_command[PRIV_CMD_lENGTH];
@@ -305,10 +324,12 @@ bool send_public_key(int socket, EVP_PKEY *public_key) {
     // Ottieni il puntatore al buffer di dati BIO
     char *buffer_data;
     long buffer_length = BIO_get_mem_data(bio, &buffer_data);
-    long lmsg=htonl(buffer_length);
-    send(socket, (void*) &lmsg, sizeof(uint32_t), 0);
-    // Invia la chiave pubblica sul socket
-    send(socket,(void *) buffer_data,buffer_length,0);
+    sendMsg(buffer_data,socket,buffer_length);
+
+    // long lmsg=htonl(buffer_length);
+    // send(socket, (void*) &lmsg, sizeof(uint32_t), 0);
+    // // Invia la chiave pubblica sul socket
+    // send(socket,(void *) buffer_data,buffer_length,0);
 
     BIO_free(bio); // Liberare la memoria del BIO
     return 0; // Invio della chiave pubblica completato con successo
