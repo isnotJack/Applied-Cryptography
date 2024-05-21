@@ -4,14 +4,6 @@ EVP_PKEY * priv_key;
 // definizione variabili per Diffie-Hellman
 EVP_PKEY * dh_params;      
 
-struct secret_Params
-{
-    int sd;
-    unsigned char * session_key1;   // used to encrypt messages
-    unsigned char * session_key2;   // used for message authentication
-    unsigned char * nonce;
-    struct secret_Params * next;
-};
 
 struct client {
     char *username;
@@ -106,7 +98,10 @@ int main(int argc, char** argv){
                     FD_SET(new_sd, &master);
                     if(new_sd > fdmax){ fdmax = new_sd; } 
                 }else{
-                    recvMsg(buffer,i);
+                    if(recvMsg(buffer,i)==-1){
+                        close(i);
+                        FD_CLR(i, &master);
+                    }
                     
 
                     if(strcmp(buffer,"HANDSHAKE")==0){
@@ -115,6 +110,11 @@ int main(int argc, char** argv){
                         EVP_PKEY* DH_keys; // --> Contains both 'a' and 'G^a'
                         // ricezione chiave pubblica del client (certificato)
                         long size = recvMsg(buffer,i);
+                        if(size==-1){
+                            close(i);
+                            FD_CLR(i, &master);
+                            continue;
+                        }
                         insertFile(buffer, size, i);
                         printf("Client certificate received \n");
 
@@ -139,7 +139,17 @@ int main(int argc, char** argv){
                         long client_sign_len;
                         unsigned char * DH_pub_client = malloc(2*KEY_LENGTH);
                         size=recvMsg(DH_pub_client,i);
+                        if(size==-1){
+                            close(i);
+                            FD_CLR(i, &master);
+                            continue;
+                        }
                         client_sign_len=recvMsg(client_signature,i);
+                        if(client_sign_len==-1){
+                            close(i);
+                            FD_CLR(i, &master);
+                            continue;
+                        }
                         
                         BIO *bio = BIO_new_mem_buf(DH_pub_client, size);
                         if (!bio) {
@@ -205,8 +215,8 @@ int main(int argc, char** argv){
                         temp->session_key1 = digest; 
                         temp->session_key2 = NULL;
                         if(sessionParam==NULL){
+                            temp->next=NULL;
                             sessionParam =temp;
-                            sessionParam->next=NULL;
                         }else {
                             temp->next=sessionParam;
                             sessionParam=temp;
@@ -225,10 +235,19 @@ int main(int argc, char** argv){
                         EVP_PKEY * C_pub_key=retrieve_pubkey("server",i);
                         unsigned char * ciphertext = (unsigned char*)malloc(MAX_LENGTH+US_LENGTH+256 + 16); //--> Credenziali cifrate
                         int cipherlen = recvMsg(ciphertext,i);
+                        if(cipherlen==-1){
+                            close(i);
+                            FD_CLR(i, &master);
+                            continue;
+                        }
                         
                         unsigned char * client_signature = malloc(EVP_PKEY_size(C_pub_key));
                         long client_sign_len=recvMsg(client_signature,i);
-
+                        if(client_sign_len==-1){
+                            close(i);
+                            FD_CLR(i, &master);
+                            continue;
+                        }
                         int ret=Verify_Signature_Msg(ciphertext,C_pub_key,client_signature,client_sign_len);
                         if(ret!=1){
                             printf("Signature Verification Error \n");
@@ -274,7 +293,7 @@ int main(int argc, char** argv){
                         unsigned char pswd[256];
                         //parse del plaintext 
                         sscanf(plaintext,"%s %s %s",username,email,pswd);
-                       printf("Prima di Ricerca\n");
+                      
                         //ricerca
                         struct client * app=users;
                         while(app!=NULL){
@@ -286,20 +305,8 @@ int main(int argc, char** argv){
                             }
                             app=app->next;
                         }
-                        printf("Prima di App\n");
+                       
                         if(app == NULL){
-                            app=malloc(sizeof(struct client));
-                            app->pswdHash=pswd;
-                            app->username=username;
-                            app->email=email;
-                            
-                            if(users == NULL){
-                                app->next=NULL;
-                            }else{
-                                app->next=users;
-                            }
-                            users=app;
-                            printf("Prima di Challenge\n");
                             char msg[]="REGOK\0";
                             sendMsg(msg,i,strlen(msg));
                             
@@ -307,25 +314,44 @@ int main(int argc, char** argv){
                             sprintf(path,"CHALLENGE_%s.txt",username);
                             FILE * file=fopen(path,"w");
                             int challenge=rand();
-                            fwrite(&challenge,1,sizeof(char *),file);
-                           
-                            printf("Dopo fclose\n");
+                            fwrite(&challenge,sizeof(int),1,file);
+                            fclose(file);
+
+                            
                             char chall_recv[11];
                             int chall_resp;
-                            recvMsg(chall_recv,i);
+                            if(recvMsg(chall_recv,i)==-1){
+                                close(i);
+                                FD_CLR(i, &master);
+                            }
+                            
                             sscanf(chall_recv,"%d",&chall_resp);
-                            if(challenge == chall_resp)
-                                printf("YEEEEEEEE\n");
-                            remove(path);
-                            fclose(file);
+                            if(challenge == chall_resp){
+                                printf("Challenge completed\n");
+                                char msg[]="CHALOK\0";
+                                sendMsg(msg,i,strlen(msg));
+                                app=malloc(sizeof(struct client));
+                                app->pswdHash=pswd;
+                                app->username=username;
+                                app->email=email;
+                                
+                                if(users == NULL){
+                                    app->next=NULL;
+                                }else{
+                                    app->next=users;
+                                }
+                                users=app;
+                                }
+                            remove(path);  
                         }
-
-                        //CHALLENGE FOR USERNAME
-                       
+                        printf("%d\n",sessionParam);
+                        if(removeSessionParam(i,&sessionParam))
+                            printf("Parametri deallocati\n");
+                        else 
+                            printf("Parametri non trovati\n");
                         strcpy(buffer,"");
                     }else{
-                        // close(i);
-                        // FD_CLR(i, &master);
+                        
                     }                
                 }
             }

@@ -19,6 +19,15 @@ int PUB_CMD_LENGTH = 129;
 int PRIV_CMD_lENGTH = 75;
 int US_LENGTH = 20;
 
+struct secret_Params
+{
+    int sd;
+    unsigned char * session_key1;   // used to encrypt messages
+    unsigned char * session_key2;   // used for message authentication
+    unsigned char * nonce;
+    struct secret_Params * next;
+};
+
 
 // Utility Functions to send and receive the lenght before the message
 bool sendMsg(char * msg, int sd,long len){
@@ -29,6 +38,7 @@ bool sendMsg(char * msg, int sd,long len){
     ret = send(sd, (void*) msg, len, 0);
     return ret;
 }
+
 
 
 long recvMsg(char * buffer,int sd){
@@ -251,6 +261,25 @@ EVP_PKEY * retrieve_pubkey(char * username, int sd){
     fclose(file);
     return pubkey;
 }
+
+ bool removeSessionParam(int i,struct secret_Params ** sessionParam){
+    struct secret_Params * del=*sessionParam;
+    struct secret_Params * before=NULL;
+    while(del!=NULL){
+        if(del->sd==i){
+            if(before==NULL){
+                *sessionParam=del->next;
+            }
+            else
+                before->next=del->next;
+            free(del);
+            return true;
+        }
+        before=del;
+        del=del->next;
+    }
+    return false;
+ }
 
 // void retrieve_pubkey(char * username, char * pubkey){
 //     char path[100];
