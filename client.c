@@ -119,8 +119,11 @@ void handshake(char * username,int sd,unsigned char* session_key1,int digestlen,
 
     // ricezione del nonce che verrà usato per generare l'altra chiave di sessione
     // utile solo quando l'handshake è seguto dal login
-    recvMsg(nonce_buf,sd);
-
+   
+    if(recvMsg(nonce_buf,sd)==-1){
+        close(sd);
+        return;
+    }
     //Eliminare a G^a G^b G^ab
     free(secret);
     free(DH_keys);
@@ -190,20 +193,31 @@ void registration(char email[],char username[],char password[],int sd){
     sendMsg(ciphertext,sd,cipherlen);
     sendMsg(signature,sd,signature_length);
     char temp_buffer[20];
-    recvMsg(temp_buffer,sd);
+    if(recvMsg(temp_buffer,sd)==-1){
+        close(sd);
+        return;
+    }
     if(strcmp(temp_buffer,"FAILED\0")==0){
-        printf("Registration failed\n Credential Already Used\n");
+        printf("Registration failed: Credential Already Used\n");
     }else{
          char path [US_LENGTH+15];
         sprintf(path,"CHALLENGE_%s.txt",username);
         int challenge;
         FILE * file =fopen(path,"r");
-        fread(&challenge,1,sizeof(int),file);
+        fread(&challenge,sizeof(int),1,file);
         fclose(file);
         char sendChall[11];
         sprintf(sendChall,"%d",challenge);
         sendMsg(sendChall,sd,strlen(sendChall));
-        printf("Registration Completed\n");
+        if(recvMsg(temp_buffer,sd)==-1){
+            close(sd);
+            return;
+        }
+        if(strcmp(temp_buffer,"CHALOK\0")==0)
+            printf("Registration Completed\n");
+        else{
+            printf("Registration failed : challenge not completed\n");
+        }
     }
     int var=start();
     if(var == 1){
@@ -278,14 +292,26 @@ int main(int argc, char** argv){
         exit(1);
     }
 
-    if(var == 1){
-        registration(email, username, password,sd);
+    
+    do{
+        if(var == 1){
+            registration(email, username, password,sd);
 
-    }else{
-        // login(email,username,password);
-        // handshake();
-        
+        }else if(var == 2){
+            login(email,username,password);
+            //handshake();
+        }else if(var == 3){
+            //Funzione di exit
+            printf("Closing Connection\n");
+            close(sd);
+            return;
+        }else{
+            printf("Input not valid\n");
+        }
+        var=start();
     }
+    while(1);
+
     
     close(sd);
 
