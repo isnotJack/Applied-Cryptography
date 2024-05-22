@@ -1,4 +1,3 @@
-/*mettere tutto in inglese*/
 #include "utility.h"
 EVP_PKEY * priv_key;
 // definizione variabili per Diffie-Hellman
@@ -131,7 +130,7 @@ int main(int argc, char** argv){
 
                         EVP_PKEY * DH_client_keys;
                         EVP_PKEY * C_pub_key=retrieve_pubkey("server",i);
-
+                        
                         unsigned char * client_signature = malloc(EVP_PKEY_size(C_pub_key));
                         long client_sign_len;
                         unsigned char * DH_pub_client = malloc(2*KEY_LENGTH);
