@@ -141,12 +141,15 @@ int main(int argc, char** argv){
                             FD_CLR(i, &master);
                             continue;
                         }
+                        printf("g^a received correctly\n");
+
                         client_sign_len=recvMsg(client_signature,i);
                         if(client_sign_len==-1){
                             close(i);
                             FD_CLR(i, &master);
                             continue;
                         }
+                        printf("Signature on g^a received correctly\n");
                         
                         BIO *bio = BIO_new_mem_buf(DH_pub_client, size);
                         if (!bio) {
@@ -169,25 +172,29 @@ int main(int argc, char** argv){
 
                         ret=Verify_Signature(DH_client_keys,C_pub_key,client_signature,client_sign_len);
                         if(ret!=1){
-                            printf("Signature Verification on Dh pub param Error \n");
+                            printf("Signature Verification on g^a Error \n");
                             close(i);
                             FD_CLR(i, &master);
                             continue;
                         }
-                        printf("Signature Verification on Dh pub param Success \n");
+                        printf("Signature Verification on g^a Success \n");
+
                         if (!send_public_key(i,DH_keys)){
-                            printf("Error sending DH public paramter\n");
+                            printf("Error sending g^b\n");
                             close(i);
                             FD_CLR(i, &master);
                             continue;
                         }
+                        printf("g^b sent correctly\n");
+
                         ret = sendMsg(signature,i,signature_length);
                         if (ret == -1){
-                            printf("Send signature on DH pub param error\n");
+                            printf("Send signature on g^b error\n");
                             close(i);
                             FD_CLR(i, &master);
                             continue;
                         }
+                        printf("Signature on g^b sent correctly\n");
                         
                         //DH_client_keys contains g^a
                         EVP_PKEY_CTX* ctx_drv = EVP_PKEY_CTX_new(DH_keys, NULL);
@@ -221,6 +228,8 @@ int main(int argc, char** argv){
                             FD_CLR(i, &master);
                             continue;
                         }
+                        printf("Nonce sent correctly\n");
+
                         //fulfil the data structure for the session parameters of the user
                         struct secret_Params * temp;
                         temp=malloc(sizeof( struct secret_Params));
@@ -256,6 +265,7 @@ int main(int argc, char** argv){
                             FD_CLR(i, &master);
                             continue;
                         }
+                        printf("Ciphertext of client's credentials received correctly\n");
                         
                         unsigned char * client_signature = malloc(EVP_PKEY_size(C_pub_key));
                         long client_sign_len=recvMsg(client_signature,i);
@@ -264,6 +274,8 @@ int main(int argc, char** argv){
                             FD_CLR(i, &master);
                             continue;
                         }
+                        printf("Signature on ciphertext received correctly\n");
+
                         ret=Verify_Signature_Msg(ciphertext,C_pub_key,client_signature,client_sign_len);
                         if(ret!=1){
                             printf("Signature Verification on received ciphertext Error \n");
@@ -355,6 +367,7 @@ int main(int argc, char** argv){
                                 close(i);
                                 FD_CLR(i, &master);
                             }
+                            printf("Challenge response received correctly\n");
                             
                             sscanf(chall_recv,"%d",&chall_resp);
                             if(challenge == chall_resp){

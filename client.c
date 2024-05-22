@@ -47,6 +47,7 @@ void handshake(char * username,int sd,unsigned char* session_key1,int digestlen,
         close(sd);
         exit;
     }
+    printf("RSA public key sent correctly\n");
 
     //printf("Dopo send public key\n");
 
@@ -65,21 +66,19 @@ void handshake(char * username,int sd,unsigned char* session_key1,int digestlen,
     int signature_length=Digital_Signature(priv_key,DH_keys,signature);
 
     if (!send_public_key(sd,DH_keys)){
-        printf("Error sending DH public parameter\n");
+        printf("Error sending g^a\n");
         close(sd);
         exit;
     }
+    printf("g^a sent correctly\n");
 
     ret = sendMsg(signature,sd,signature_length);
     if (ret == -1){
-        printf("Send signature on DH pub param error \n");
+        printf("Send signature on g^a error \n");
         close(sd);
         exit;
     }
-
-    // long lmsg = htonl(signature_length);
-    // send(sd, (void*) &lmsg, sizeof(uint32_t), 0);
-    // send(sd, (void*) signature, signature_length, 0);
+    printf("Signature on g^a sent correctly\n");
 
     /////////RICEVO DAL SERVER ///////
     EVP_PKEY * DH_server_keys;
@@ -89,16 +88,20 @@ void handshake(char * username,int sd,unsigned char* session_key1,int digestlen,
     unsigned char * DH_pub_server = malloc(2*KEY_LENGTH);
     int size=recvMsg(DH_pub_server,sd);
     if(size==-1){
-        printf("Receive error \n");
+        printf("Receive of g^b error \n");
         close(sd);
         exit;
     }
+    printf("g^b received correctly\n");
+
     server_sign_len=recvMsg(server_signature,sd);
      if(server_sign_len==-1){
-        printf("Receive error \n");
+        printf("Receive of signature on g^b error \n");
         close(sd);
         exit;
     }
+    printf("Signature on g^b received correctly\n");
+
 
     BIO *bio = BIO_new_mem_buf(DH_pub_server, size);
      if (!bio) {
@@ -118,11 +121,11 @@ void handshake(char * username,int sd,unsigned char* session_key1,int digestlen,
     BIO_free(bio);
     ret = Verify_Signature(DH_server_keys,serverKey,server_signature,server_sign_len);
     if(ret!=1){
-        printf("Signature Verification on DH pub param Error \n");
+        printf("Signature Verification on g^b Error \n");
         close(sd);
         exit(1);
     }
-    printf("Signature Verification on DH pub param Success \n");
+    printf("Signature Verification on g^b Success \n");
 
     //DH_server_keys contains g^b
     EVP_PKEY_CTX* ctx_drv = EVP_PKEY_CTX_new(DH_keys, NULL);
@@ -147,6 +150,7 @@ void handshake(char * username,int sd,unsigned char* session_key1,int digestlen,
         close(sd);
         exit(1);
     }
+    printf("Nonce received correctly\n");
 
     //Eliminazione a g^a g^b g^ab
     free(secret);
@@ -229,6 +233,7 @@ void registration(char email[],char username[],char password[],int sd){
         close(sd);
         exit;
     }
+    printf("Enc(username, email, H(password)) sent correctly\n");
     
     ret = sendMsg(signature,sd,signature_length);
     if (ret == -1){
@@ -236,6 +241,7 @@ void registration(char email[],char username[],char password[],int sd){
         close(sd);
         exit;
     }
+    printf("Signature on ciphertext sent correctly\n");
 
     char temp_buffer[20];
     if(recvMsg(temp_buffer,sd)==-1){
@@ -259,6 +265,7 @@ void registration(char email[],char username[],char password[],int sd){
             close(sd);
             exit;
         }
+        printf("Challenge response sent correctly\n");
         if(recvMsg(temp_buffer,sd)==-1){
             close(sd);
             return;

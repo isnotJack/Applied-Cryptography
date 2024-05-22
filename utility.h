@@ -68,10 +68,9 @@ void DH_parameter_generation(){
 }
 
 
-void DH_PubPriv(EVP_PKEY* dh_params, EVP_PKEY ** my_prvkey,EVP_PKEY_CTX * DH_ctx){
+void DH_PubPriv(EVP_PKEY* dh_params, EVP_PKEY ** my_prvkey, EVP_PKEY_CTX * DH_ctx){
     EVP_PKEY_keygen_init(DH_ctx);
-    EVP_PKEY_keygen(DH_ctx, my_prvkey); //Generate both 'a' and 'G^a'
-
+    EVP_PKEY_keygen(DH_ctx, my_prvkey); //Generate both 'a' and 'g^a'
 }
 
 int Hash(unsigned char * digest, unsigned char *msg ,int msg_len){
