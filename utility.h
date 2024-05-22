@@ -35,11 +35,10 @@ bool sendMsg(char * msg, int sd,long len){
     long lmsg;
     lmsg = htonl(len);
     ret = send(sd, (void*) &lmsg, sizeof(uint32_t), 0);
-    ret = send(sd, (void*) msg, len, 0);
+    if (ret != -1)
+        ret = send(sd, (void*) msg, len, 0);
     return ret;
 }
-
-
 
 long recvMsg(char * buffer,int sd){
     int ret;
@@ -145,6 +144,7 @@ int Hash(unsigned char * digest, unsigned char *msg ,int msg_len){
     return ret;
  }
 
+// Firma digitale su una chiave
 int Digital_Signature(EVP_PKEY * priv_key, EVP_PKEY * DH_keys, unsigned char * signature){
 
     int signature_len;
@@ -169,12 +169,13 @@ int Digital_Signature(EVP_PKEY * priv_key, EVP_PKEY * DH_keys, unsigned char * s
 
     EVP_SignUpdate(ctx, (unsigned char*)buffer,buffer_length);
     EVP_SignFinal(ctx, signature, &signature_len,priv_key);
-    printf("Signature done \n");
+    printf("Signature on DH public parameter done \n");
     EVP_MD_CTX_free(ctx);
     BIO_free(bio); // Liberare la memoria del BIO
     return signature_len;
 }
 
+// Firma digitale su un messaggio
 int Digital_Signature_Msg(EVP_PKEY * priv_key, unsigned char * msg, unsigned char * signature){
     int signature_len;
     EVP_MD_CTX* ctx = EVP_MD_CTX_new();
@@ -182,10 +183,11 @@ int Digital_Signature_Msg(EVP_PKEY * priv_key, unsigned char * msg, unsigned cha
     // Ottieni il puntatore al buffer di dati BIO
     EVP_SignUpdate(ctx, (unsigned char*)msg,sizeof(msg));
     EVP_SignFinal(ctx, signature, &signature_len,priv_key);
-    printf("Signature done \n");
+    printf("Signature on Enc(username, email, H(password)) done \n");
     EVP_MD_CTX_free(ctx);
     return signature_len;
 }
+
 int Verify_Signature_Msg(unsigned char * ciphertext,EVP_PKEY * pubkey, unsigned char * signature, int signature_length){
     EVP_MD_CTX* VER_ctx = EVP_MD_CTX_new();
     EVP_VerifyInit(VER_ctx, EVP_sha256());
@@ -296,7 +298,6 @@ EVP_PKEY * retrieve_pubkey(char * username, int sd){
 //     fread(pubkey,1,KEY_LENGTH,file);
 // }
 
-
 void insertFile(char *buffer,int size, int i){
     char path[100];
     sprintf(path,"./keys_server/keys_retrieved/cert_%d.pem",i);
@@ -339,21 +340,23 @@ bool checkInput(char * input){
 }
 
 bool send_public_key(int socket, EVP_PKEY *public_key) {
+    int ret;
     BIO *bio = BIO_new(BIO_s_mem()); // Creazione di un BIO in memoria
-    if (!bio) {
-        return 1; // Errore nella creazione del BIO
-    }
+    if (!bio)
+        return 0; // Errore nella creazione del BIO
  
     // Scrittura della chiave pubblica nel BIO
     if (!PEM_write_bio_PUBKEY(bio, public_key)) {
-        BIO_free(bio); // Liberare la memoria del BIO
-        return 1; // Errore nella scrittura della chiave pubblica nel BIO
+        BIO_free(bio);  // Liberare la memoria del BIO
+        return 0;       // Errore nella scrittura della chiave pubblica nel BIO
     }
  
     // Ottieni il puntatore al buffer di dati BIO
     char *buffer_data;
     long buffer_length = BIO_get_mem_data(bio, &buffer_data);
-    sendMsg(buffer_data,socket,buffer_length);
+    ret = sendMsg(buffer_data,socket,buffer_length);
+    if (ret == -1)
+        return 0;
 
     // long lmsg=htonl(buffer_length);
     // send(socket, (void*) &lmsg, sizeof(uint32_t), 0);
@@ -361,7 +364,7 @@ bool send_public_key(int socket, EVP_PKEY *public_key) {
     // send(socket,(void *) buffer_data,buffer_length,0);
 
     BIO_free(bio); // Liberare la memoria del BIO
-    return 0; // Invio della chiave pubblica completato con successo
+    return 1; // Invio della chiave pubblica completato con successo
 }
 
 
