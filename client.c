@@ -13,12 +13,13 @@ int start(){
     printf("Select one of the following options:\n");
     printf("[1] Registration\n");
     printf("[2] Login\n");
+    printf("[3] Exit\n");
     
     while(1){
         printf("> ");
         scanf("%d", &choice);
         while(getchar() !='\n');
-        if(choice != 1 && choice != 2){
+        if(choice != 1 && choice != 2 && choice != 3){
             printf("Invalid choice, try again.\n");
         }else{
             return choice;
@@ -30,10 +31,25 @@ void handshake(char * username,int sd,unsigned char* session_key1,int digestlen,
     EVP_PKEY_CTX * DH_ctx;
     EVP_PKEY* DH_keys;
     EVP_PKEY * priv_key;        // per la chiave privata usata per firmare
+    int ret;
+
     pubkey = retrieve_pubkey(username,0);
-    sendMsg("HANDSHAKE",sd,10);
-    send_public_key(sd, pubkey);    // invio al server della chiave pubblica RSA
-    printf("Dopo send public key\n");
+
+    printf("Handshake start...\n");
+    ret = sendMsg("HANDSHAKE",sd,10);
+    if (ret == -1){
+        printf("Send Handshake message error \n");
+        close(sd);
+        exit;
+    }
+    if (!send_public_key(sd, pubkey)){            // invio al server della chiave pubblica RSA
+        printf("Error sending RSA public key\n");
+        close(sd);
+        exit;
+    }
+    printf("RSA public key sent correctly\n");
+
+    //printf("Dopo send public key\n");
 
     //Chiave pubblica server letta da file del server "keys_server" (BARBINO)
     serverKey = retrieve_pubkey("server",-1);
@@ -49,12 +65,20 @@ void handshake(char * username,int sd,unsigned char* session_key1,int digestlen,
     signature = malloc(EVP_PKEY_size(priv_key));
     int signature_length=Digital_Signature(priv_key,DH_keys,signature);
 
-    send_public_key(sd,DH_keys);
-    sendMsg(signature,sd,signature_length);
+    if (!send_public_key(sd,DH_keys)){
+        printf("Error sending g^a\n");
+        close(sd);
+        exit;
+    }
+    printf("g^a sent correctly\n");
 
-    // long lmsg = htonl(signature_length);
-    // send(sd, (void*) &lmsg, sizeof(uint32_t), 0);
-    // send(sd, (void*) signature, signature_length, 0);
+    ret = sendMsg(signature,sd,signature_length);
+    if (ret == -1){
+        printf("Send signature on g^a error \n");
+        close(sd);
+        exit;
+    }
+    printf("Signature on g^a sent correctly\n");
 
     /////////RICEVO DAL SERVER ///////
     EVP_PKEY * DH_server_keys;
@@ -64,16 +88,20 @@ void handshake(char * username,int sd,unsigned char* session_key1,int digestlen,
     unsigned char * DH_pub_server = malloc(2*KEY_LENGTH);
     int size=recvMsg(DH_pub_server,sd);
     if(size==-1){
-        printf("Receive error \n");
+        printf("Receive of g^b error \n");
         close(sd);
         exit;
     }
+    printf("g^b received correctly\n");
+
     server_sign_len=recvMsg(server_signature,sd);
      if(server_sign_len==-1){
-        printf("Receive error \n");
+        printf("Receive of signature on g^b error \n");
         close(sd);
         exit;
     }
+    printf("Signature on g^b received correctly\n");
+
 
     BIO *bio = BIO_new_mem_buf(DH_pub_server, size);
      if (!bio) {
@@ -91,15 +119,15 @@ void handshake(char * username,int sd,unsigned char* session_key1,int digestlen,
     }
 
     BIO_free(bio);
-    int ret=Verify_Signature(DH_server_keys,serverKey,server_signature,server_sign_len);
+    ret = Verify_Signature(DH_server_keys,serverKey,server_signature,server_sign_len);
     if(ret!=1){
-        printf("Signature Verification Error \n");
+        printf("Signature Verification on g^b Error \n");
         close(sd);
         exit(1);
     }
-    printf("Signature Verification Success \n");
+    printf("Signature Verification on g^b Success \n");
 
-    //DH_server_keys contains G^b
+    //DH_server_keys contains g^b
     EVP_PKEY_CTX* ctx_drv = EVP_PKEY_CTX_new(DH_keys, NULL);
     EVP_PKEY_derive_init(ctx_drv);
     EVP_PKEY_derive_set_peer(ctx_drv, DH_server_keys);
@@ -113,26 +141,27 @@ void handshake(char * username,int sd,unsigned char* session_key1,int digestlen,
     EVP_PKEY_CTX_free(ctx_drv);
 
     //generate first session key-->hash(secret)
-
-    
     digestlen = Hash(session_key1, secret, secretlen);
 
     // ricezione del nonce che verrà usato per generare l'altra chiave di sessione
-    // utile solo quando l'handshake è seguto dal login
-   
+    // utile solo quando l'handshake è seguito dal login
     if(recvMsg(nonce_buf,sd)==-1){
+        printf("Error receiving nonce\n");
         close(sd);
-        return;
+        exit(1);
     }
-    //Eliminare a G^a G^b G^ab
+    printf("Nonce received correctly\n");
+
+    //Eliminazione a g^a g^b g^ab
     free(secret);
     free(DH_keys);
     free(DH_server_keys);
     free(priv_key);
 }
 
-
 void registration(char email[],char username[],char password[],int sd){
+    int ret;
+
     //inserire credenziali
     printf("Insert the following parameters\n");
     do{
@@ -156,14 +185,15 @@ void registration(char email[],char username[],char password[],int sd){
         fflush(stdin);
     }while(!checkInput(password));
 
-    // generazione coppia di chiavi associata all'username
-    // questo trucco permette di simulare "offline" il meccanismo dei certificati
-    // è come se si creasse la coppia di chiavi e la chiave pubblica fosse contenuta all'interno di un certificato
+    
     keys_generation(username);
     unsigned char * session_key1 = (unsigned char*)malloc(EVP_MD_size(EVP_sha256()));
     int digestlen;
     char nonce_buf[11];
     handshake(username, sd,session_key1,digestlen,nonce_buf);     // esecuzione protocollo di handshake
+    printf("Handshake completed.\n");
+
+    printf("Registration start...\n");
     // mandare credenziali cifrate e con firma
     unsigned char * pswdHash;
     pswdHash = (unsigned char*)malloc(EVP_MD_size(EVP_sha256()));
@@ -189,9 +219,30 @@ void registration(char email[],char username[],char password[],int sd){
     int signature_length=Digital_Signature_Msg(priv_key,ciphertext,signature);
     
     //invio credenziali cifrate + firma digitale
-    sendMsg("REGISTRATION",sd,13);
-    sendMsg(ciphertext,sd,cipherlen);
-    sendMsg(signature,sd,signature_length);
+
+    ret = sendMsg("REGISTRATION",sd,13);
+    if (ret == -1){
+        printf("Send Registration error \n");
+        close(sd);
+        exit;
+    }
+
+    ret = sendMsg(ciphertext,sd,cipherlen);
+    if (ret == -1){
+        printf("Send ciphertext error \n");
+        close(sd);
+        exit;
+    }
+    printf("Enc(username, email, H(password)) sent correctly\n");
+    
+    ret = sendMsg(signature,sd,signature_length);
+    if (ret == -1){
+        printf("Send ciphertext signature error \n");
+        close(sd);
+        exit;
+    }
+    printf("Signature on ciphertext sent correctly\n");
+
     char temp_buffer[20];
     if(recvMsg(temp_buffer,sd)==-1){
         close(sd);
@@ -200,7 +251,7 @@ void registration(char email[],char username[],char password[],int sd){
     if(strcmp(temp_buffer,"FAILED\0")==0){
         printf("Registration failed: Credential Already Used\n");
     }else{
-         char path [US_LENGTH+15];
+        char path [US_LENGTH+15];
         sprintf(path,"CHALLENGE_%s.txt",username);
         int challenge;
         FILE * file =fopen(path,"r");
@@ -208,24 +259,23 @@ void registration(char email[],char username[],char password[],int sd){
         fclose(file);
         char sendChall[11];
         sprintf(sendChall,"%d",challenge);
-        sendMsg(sendChall,sd,strlen(sendChall));
+        ret = sendMsg(sendChall,sd,strlen(sendChall));
+        if (ret == -1){
+            printf("Send challenge response error \n");
+            close(sd);
+            exit;
+        }
+        printf("Challenge response sent correctly\n");
         if(recvMsg(temp_buffer,sd)==-1){
             close(sd);
             return;
         }
         if(strcmp(temp_buffer,"CHALOK\0")==0)
-            printf("Registration Completed\n");
+            printf("Registration Completed.\n");
         else{
-            printf("Registration failed : challenge not completed\n");
+            printf("Registration failed : challenge not completed.\n");
         }
     }
-    int var=start();
-    if(var == 1){
-        registration(email, username, password,sd);
-        }else{
-            // login(email,username,password);
-            // handshake();   
-        }
 }
 
 void help(){
@@ -285,34 +335,27 @@ int main(int argc, char** argv){
     srv_addr.sin_port = htons(clt_port);
     inet_pton(AF_INET, "127.0.0.1", &srv_addr.sin_addr);
 
-    
     ret = connect(sd, (struct sockaddr*)&srv_addr, sizeof(srv_addr));
     if(ret < 0){
         printf("Connection error\n");
         exit(1);
     }
 
-    
     do{
         if(var == 1){
             registration(email, username, password,sd);
-
         }else if(var == 2){
-            login(email,username,password);
+            //login(email,username,password);
             //handshake();
         }else if(var == 3){
             //Funzione di exit
-            printf("Closing Connection\n");
+            printf("Closing Application\n");
             close(sd);
-            return;
-        }else{
-            printf("Input not valid\n");
+            return 0;
         }
         var=start();
-    }
-    while(1);
+    } while(1);
 
-    
     close(sd);
 
     return 0;

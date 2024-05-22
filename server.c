@@ -4,15 +4,12 @@ EVP_PKEY * priv_key;
 // definizione variabili per Diffie-Hellman
 EVP_PKEY * dh_params;      
 
-
 struct client {
     char *username;
     char *email ;
     unsigned char * pswdHash;
     struct client * next;
 };
-
-
 
 int main(int argc, char** argv){    
     int listener, new_sd,len;
@@ -39,7 +36,6 @@ int main(int argc, char** argv){
     else
         srv_port = atoi(argv[1]);   // server in ascolto sulla porta passata come parametro al comando
         
-    
     listener = socket(AF_INET, SOCK_STREAM, 0); // creazione socket di ascolto 
     if (listener == -1){
         printf("Error creating the listening socket\n");
@@ -101,10 +97,11 @@ int main(int argc, char** argv){
                     if(recvMsg(buffer,i)==-1){
                         close(i);
                         FD_CLR(i, &master);
+                        continue;
                     }
-                    
-
+                
                     if(strcmp(buffer,"HANDSHAKE")==0){
+                        printf("Handshake start...\n");
                         srand(time(NULL));
                         EVP_PKEY_CTX * DH_ctx; //--> Context for Diffi Hellman
                         EVP_PKEY* DH_keys; // --> Contains both 'a' and 'G^a'
@@ -123,7 +120,7 @@ int main(int argc, char** argv){
                         // Genearation of public/private pair
                         DH_ctx = EVP_PKEY_CTX_new(dh_params, NULL);
                         DH_keys = NULL;
-                        DH_PubPriv(dh_params, &DH_keys,DH_ctx);   // generazione parametro privato b e pubblic g^b
+                        DH_PubPriv(dh_params, &DH_keys, DH_ctx);   // generazione parametro privato b e pubblic g^b
                         printf("Private/public pair for DH generated\n");
                         priv_key = retrieve_privkey("server");
                         EVP_PKEY_CTX_free(DH_ctx);
@@ -144,17 +141,21 @@ int main(int argc, char** argv){
                             FD_CLR(i, &master);
                             continue;
                         }
+                        printf("g^a received correctly\n");
+
                         client_sign_len=recvMsg(client_signature,i);
                         if(client_sign_len==-1){
                             close(i);
                             FD_CLR(i, &master);
                             continue;
                         }
+                        printf("Signature on g^a received correctly\n");
                         
                         BIO *bio = BIO_new_mem_buf(DH_pub_client, size);
                         if (!bio) {
                             // Errore nella creazione del BIO
                              close(i);
+                             FD_CLR(i, &master);
                              continue;
                         }
                         // Lettura della chiave pubblica dal BIO
@@ -163,6 +164,7 @@ int main(int argc, char** argv){
                             // Errore nella lettura della chiave pubblica dal BIO
                             BIO_free(bio); // Liberare la memoria del BIO
                             close(i);
+                            FD_CLR(i, &master);
                             continue;
                         }
                         // Liberare la memoria del BIO
@@ -170,16 +172,31 @@ int main(int argc, char** argv){
 
                         ret=Verify_Signature(DH_client_keys,C_pub_key,client_signature,client_sign_len);
                         if(ret!=1){
-                            printf("Signature Verification Error \n");
+                            printf("Signature Verification on g^a Error \n");
                             close(i);
+                            FD_CLR(i, &master);
                             continue;
                         }
-                        printf("Signature Verification Success \n");
-                        send_public_key(i,DH_keys);
-                        sendMsg(signature,i,signature_length);
+                        printf("Signature Verification on g^a Success \n");
+
+                        if (!send_public_key(i,DH_keys)){
+                            printf("Error sending g^b\n");
+                            close(i);
+                            FD_CLR(i, &master);
+                            continue;
+                        }
+                        printf("g^b sent correctly\n");
+
+                        ret = sendMsg(signature,i,signature_length);
+                        if (ret == -1){
+                            printf("Send signature on g^b error\n");
+                            close(i);
+                            FD_CLR(i, &master);
+                            continue;
+                        }
+                        printf("Signature on g^b sent correctly\n");
                         
-                        
-                        //DH_client_keys contains G^a
+                        //DH_client_keys contains g^a
                         EVP_PKEY_CTX* ctx_drv = EVP_PKEY_CTX_new(DH_keys, NULL);
                         EVP_PKEY_derive_init(ctx_drv);
                         EVP_PKEY_derive_set_peer(ctx_drv, DH_client_keys);
@@ -192,13 +209,11 @@ int main(int argc, char** argv){
                         EVP_PKEY_derive(ctx_drv, secret, &secretlen);
                         EVP_PKEY_CTX_free(ctx_drv);
 
-
                         char nonce_buf[11];
                         int nonce=rand();
                         sprintf(nonce_buf,"%d",nonce);
 
                         //generate first session key-->hash(secret)
-                        
                         unsigned char* digest;
                         int digestlen;
                         digest = (unsigned char*)malloc(EVP_MD_size(EVP_sha256()));
@@ -206,8 +221,16 @@ int main(int argc, char** argv){
                         digestlen=Hash(digest,secret,secretlen);
                         
                         //send nonce
-                        sendMsg(nonce_buf,i,strlen(nonce_buf)+1);
-                        //fulfill the data structure for the session parameters of the user
+                        ret = sendMsg(nonce_buf,i,strlen(nonce_buf)+1);
+                        if (ret == -1){
+                            printf("Send nonce error\n");
+                            close(i);
+                            FD_CLR(i, &master);
+                            continue;
+                        }
+                        printf("Nonce sent correctly\n");
+
+                        //fulfil the data structure for the session parameters of the user
                         struct secret_Params * temp;
                         temp=malloc(sizeof( struct secret_Params));
                         temp->nonce = nonce_buf;
@@ -222,16 +245,18 @@ int main(int argc, char** argv){
                             sessionParam=temp;
                         }
 
-                        //Eliminare b G^b G^ab
-                        //Eliminare a G^a G^b G^ab
+                        //Eliminare b a g^b g^a g^ab
                         free(secret);
                         EVP_PKEY_free(DH_keys);
                         EVP_PKEY_free(DH_client_keys);
                         EVP_PKEY_free(priv_key);
                         free(signature);
                         free(client_signature); 
+
+                        printf("Handshake completed.\n");
                         strcpy(buffer,"");
                     }else if(strcmp(buffer,"REGISTRATION")==0){
+                        printf("Registration start...\n");
                         EVP_PKEY * C_pub_key=retrieve_pubkey("server",i);
                         unsigned char * ciphertext = (unsigned char*)malloc(MAX_LENGTH+US_LENGTH+256 + 16); //--> Credenziali cifrate
                         int cipherlen = recvMsg(ciphertext,i);
@@ -240,6 +265,7 @@ int main(int argc, char** argv){
                             FD_CLR(i, &master);
                             continue;
                         }
+                        printf("Ciphertext of client's credentials received correctly\n");
                         
                         unsigned char * client_signature = malloc(EVP_PKEY_size(C_pub_key));
                         long client_sign_len=recvMsg(client_signature,i);
@@ -248,13 +274,16 @@ int main(int argc, char** argv){
                             FD_CLR(i, &master);
                             continue;
                         }
-                        int ret=Verify_Signature_Msg(ciphertext,C_pub_key,client_signature,client_sign_len);
+                        printf("Signature on ciphertext received correctly\n");
+
+                        ret=Verify_Signature_Msg(ciphertext,C_pub_key,client_signature,client_sign_len);
                         if(ret!=1){
-                            printf("Signature Verification Error \n");
+                            printf("Signature Verification on received ciphertext Error \n");
                             close(i);
+                            FD_CLR(i, &master);
                             continue;
                         }
-                        printf("Signature Verification Success \n");
+                        printf("Signature Verification on received ciphertext Success \n");
 
                         //Decifro le credenziali
                         unsigned char * session_key1 = (unsigned char*)malloc(EVP_MD_size(EVP_sha256())); 
@@ -269,6 +298,8 @@ int main(int argc, char** argv){
                         }
                         if(temp==NULL){
                             printf("Session key Not Found \n");
+                            close(i);
+                            FD_CLR(i, &master);
                             continue;
                         }
                         unsigned char * plaintext=malloc(MAX_LENGTH + US_LENGTH +256);
@@ -281,9 +312,9 @@ int main(int argc, char** argv){
                         plainlen = outlen;
                         ret = EVP_DecryptFinal(ctx, plaintext + plainlen, &outlen);
                         if(ret == 0){
-                            printf("Decrypt Error \n");
+                            printf("Decryption Error \n");
                         }else{
-                         printf("Correct Decryption\n");
+                         printf("Correct Decryption: username, email, H(password) received\n");
                         }
                         plainlen += outlen;
                         EVP_CIPHER_CTX_free(ctx);
@@ -300,7 +331,13 @@ int main(int argc, char** argv){
                             if(strcmp(app->username,username)==0 || strcmp(app->pswdHash,pswd)==0){
                                 printf("Registration Failed \n Credential already used \n");
                                 char msg[]="FAILED\0";
-                                sendMsg(msg,i,strlen(msg));
+                                ret = sendMsg(msg,i,strlen(msg));
+                                if (ret == -1){
+                                    printf("Send Failed message error\n");
+                                    close(i);
+                                    FD_CLR(i, &master);
+                                    continue;
+                                }
                                 break;
                             }
                             app=app->next;
@@ -308,7 +345,13 @@ int main(int argc, char** argv){
                        
                         if(app == NULL){
                             char msg[]="REGOK\0";
-                            sendMsg(msg,i,strlen(msg));
+                            ret = sendMsg(msg,i,strlen(msg));
+                            if (ret == -1){
+                                printf("Send RegOK message error\n");
+                                close(i);
+                                FD_CLR(i, &master);
+                                continue;
+                            }
                             
                             char path [US_LENGTH+15];
                             sprintf(path,"CHALLENGE_%s.txt",username);
@@ -324,12 +367,19 @@ int main(int argc, char** argv){
                                 close(i);
                                 FD_CLR(i, &master);
                             }
+                            printf("Challenge response received correctly\n");
                             
                             sscanf(chall_recv,"%d",&chall_resp);
                             if(challenge == chall_resp){
                                 printf("Challenge completed\n");
                                 char msg[]="CHALOK\0";
-                                sendMsg(msg,i,strlen(msg));
+                                ret = sendMsg(msg,i,strlen(msg));
+                                if (ret == -1){
+                                    printf("Send ChalOK message error\n");
+                                    close(i);
+                                    FD_CLR(i, &master);
+                                    continue;
+                                }
                                 app=malloc(sizeof(struct client));
                                 app->pswdHash=pswd;
                                 app->username=username;
@@ -344,11 +394,12 @@ int main(int argc, char** argv){
                                 }
                             remove(path);  
                         }
-                        printf("%d\n",sessionParam);
+                        //printf("%d\n",sessionParam);
                         if(removeSessionParam(i,&sessionParam))
                             printf("Parametri deallocati\n");
                         else 
                             printf("Parametri non trovati\n");
+                        printf("User registration completed.\n");
                         strcpy(buffer,"");
                     }else{
                         
