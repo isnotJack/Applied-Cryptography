@@ -40,12 +40,12 @@ void handshake(char * username,int sd,unsigned char* session_key1,int digestlen,
     if (ret == -1){
         printf("Send Handshake message error \n");
         close(sd);
-        exit;
+        exit(1);
     }
     if (!send_public_key(sd, pubkey)){            // invio al server della chiave pubblica RSA
         printf("Error sending RSA public key\n");
         close(sd);
-        exit;
+        exit(1);
     }
     printf("RSA public key sent correctly\n");
 
@@ -68,7 +68,7 @@ void handshake(char * username,int sd,unsigned char* session_key1,int digestlen,
     if (!send_public_key(sd,DH_keys)){
         printf("Error sending g^a\n");
         close(sd);
-        exit;
+        exit(1);
     }
     printf("g^a sent correctly\n");
 
@@ -76,7 +76,7 @@ void handshake(char * username,int sd,unsigned char* session_key1,int digestlen,
     if (ret == -1){
         printf("Send signature on g^a error \n");
         close(sd);
-        exit;
+        exit(1);
     }
     printf("Signature on g^a sent correctly\n");
 
@@ -90,7 +90,7 @@ void handshake(char * username,int sd,unsigned char* session_key1,int digestlen,
     if(size==-1){
         printf("Receive of g^b error \n");
         close(sd);
-        exit;
+        exit(1);
     }
     printf("g^b received correctly\n");
 
@@ -98,7 +98,7 @@ void handshake(char * username,int sd,unsigned char* session_key1,int digestlen,
      if(server_sign_len==-1){
         printf("Receive of signature on g^b error \n");
         close(sd);
-        exit;
+        exit(1);
     }
     printf("Signature on g^b received correctly\n");
 
@@ -224,14 +224,14 @@ void registration(char email[],char username[],char password[],int sd){
     if (ret == -1){
         printf("Send Registration error \n");
         close(sd);
-        exit;
+        exit(1);
     }
 
     ret = sendMsg(ciphertext,sd,cipherlen);
     if (ret == -1){
         printf("Send ciphertext error \n");
         close(sd);
-        exit;
+        exit(1);
     }
     printf("Enc(username, email, H(password)) sent correctly\n");
     
@@ -239,14 +239,14 @@ void registration(char email[],char username[],char password[],int sd){
     if (ret == -1){
         printf("Send ciphertext signature error \n");
         close(sd);
-        exit;
+        exit(1);
     }
     printf("Signature on ciphertext sent correctly\n");
 
     char temp_buffer[20];
     if(recvMsg(temp_buffer,sd)==-1){
         close(sd);
-        return;
+        exit(1);
     }
     if(strcmp(temp_buffer,"FAILED\0")==0){
         printf("Registration failed: Credential Already Used\n");
@@ -263,12 +263,12 @@ void registration(char email[],char username[],char password[],int sd){
         if (ret == -1){
             printf("Send challenge response error \n");
             close(sd);
-            exit;
+            exit(1);
         }
         printf("Challenge response sent correctly\n");
         if(recvMsg(temp_buffer,sd)==-1){
             close(sd);
-            return;
+            exit(1);
         }
         if(strcmp(temp_buffer,"CHALOK\0")==0)
             printf("Registration Completed.\n");
