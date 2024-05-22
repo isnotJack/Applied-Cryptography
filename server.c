@@ -1,5 +1,4 @@
 #include "utility.h"
-EVP_PKEY * priv_key;
 // definizione variabili per Diffie-Hellman
 EVP_PKEY * dh_params;      
 
@@ -102,6 +101,7 @@ int main(int argc, char** argv){
                     if(strcmp(buffer,"HANDSHAKE")==0){
                         printf("Handshake start...\n");
                         srand(time(NULL));
+                        EVP_PKEY * priv_key;
                         EVP_PKEY_CTX * DH_ctx; //--> Context for Diffi Hellman
                         EVP_PKEY* DH_keys; // --> Contains both 'a' and 'G^a'
                         // ricezione chiave pubblica del client (certificato)
@@ -115,15 +115,14 @@ int main(int argc, char** argv){
                         printf("Client certificate received \n");
 
                         // Invio chiave pubblica server   
-
+                        
                         // Genearation of public/private pair
                         DH_ctx = EVP_PKEY_CTX_new(dh_params, NULL);
+                        priv_key = retrieve_privkey("server");
                         DH_keys = NULL;
                         DH_PubPriv(dh_params, &DH_keys, DH_ctx);   // generazione parametro privato b e pubblic g^b
                         printf("Private/public pair for DH generated\n");
-                        priv_key = retrieve_privkey("server");
                         EVP_PKEY_CTX_free(DH_ctx);
-
                         unsigned char* signature;
                         signature = malloc(EVP_PKEY_size(priv_key));
                         int signature_length=Digital_Signature(priv_key, DH_keys, signature);
@@ -255,6 +254,7 @@ int main(int argc, char** argv){
                         printf("Handshake completed.\n");
                         strcpy(buffer,"");
                     }else if(strcmp(buffer,"REGISTRATION")==0){
+                         
                         printf("Registration start...\n");
                         EVP_PKEY * C_pub_key=retrieve_pubkey("server",i);
                         unsigned char * ciphertext = (unsigned char*)malloc(MAX_LENGTH+US_LENGTH+256 + 16); //--> Credenziali cifrate
@@ -301,7 +301,7 @@ int main(int argc, char** argv){
                             FD_CLR(i, &master);
                             continue;
                         }
-                        unsigned char * plaintext=malloc(MAX_LENGTH + US_LENGTH +256);
+                        unsigned char * plaintext=malloc(MAX_LENGTH + US_LENGTH +256+5);
                         int outlen;
                         int plainlen;
                         EVP_CIPHER_CTX* ctx;
@@ -318,17 +318,16 @@ int main(int argc, char** argv){
                         plainlen += outlen;
                         EVP_CIPHER_CTX_free(ctx);
                         
+                        
                         char username [US_LENGTH];
                         char email [MAX_LENGTH];
                         unsigned char pswd[256];
                         //parse del plaintext 
-                        sscanf(plaintext,"%s %s %s",username,email,pswd);
-                      
-                        //ricerca
-                        struct client * app=users;
+                        sscanf(plaintext,"%19s %49s %255s",username,email,pswd);
+                        struct client * app=users;  
                         while(app!=NULL){
-                            if(strcmp(app->username,username)==0 || strcmp(app->pswdHash,pswd)==0){
-                                printf("Registration Failed \n Credential already used \n");
+                            if(strcmp(app->username,username)==0 || strcmp(app->email,email)==0){
+                                printf("Registration Failed \nCredential already used \n");
                                 char msg[]="FAILED\0";
                                 ret = sendMsg(msg,i,strlen(msg));
                                 if (ret == -1){
@@ -380,9 +379,9 @@ int main(int argc, char** argv){
                                     continue;
                                 }
                                 app=malloc(sizeof(struct client));
-                                app->pswdHash=pswd;
-                                app->username=username;
-                                app->email=email;
+                                app->username = strdup(username);         
+                                app->pswdHash = strdup(pswd);         
+                                app->email = strdup(email);
                                 
                                 if(users == NULL){
                                     app->next=NULL;
@@ -399,6 +398,7 @@ int main(int argc, char** argv){
                         else 
                             printf("Parametri non trovati\n");
                         printf("User registration completed.\n");
+                        
                         strcpy(buffer,"");
                     }else{
                         

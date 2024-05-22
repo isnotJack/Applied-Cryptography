@@ -154,9 +154,9 @@ void handshake(char * username,int sd,unsigned char* session_key1,int digestlen,
 
     //Eliminazione a g^a g^b g^ab
     free(secret);
-    free(DH_keys);
-    free(DH_server_keys);
-    free(priv_key);
+    EVP_PKEY_free(DH_keys);
+    EVP_PKEY_free(DH_server_keys);
+    EVP_PKEY_free(priv_key);
 }
 
 void registration(char email[],char username[],char password[],int sd){
