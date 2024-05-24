@@ -13,6 +13,7 @@
 #include <regex.h>
 #include <malloc.h>
 #include <stdio.h>
+#include <openssl/hmac.h>
 
 
 

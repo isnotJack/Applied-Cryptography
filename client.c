@@ -27,7 +27,7 @@ int start(){
     }
 }
 
-void handshake(char * username,int sd,unsigned char* session_key1,int digestlen,char * nonce_buf){
+void handshake(char * username,int sd,unsigned char* session_key1,int key1_len,char * nonce_buf){
     EVP_PKEY_CTX * DH_ctx;
     EVP_PKEY* DH_keys;
     EVP_PKEY * priv_key;        // per la chiave privata usata per firmare
@@ -141,7 +141,7 @@ void handshake(char * username,int sd,unsigned char* session_key1,int digestlen,
     EVP_PKEY_CTX_free(ctx_drv);
 
     //generate first session key-->hash(secret)
-    digestlen = Hash(session_key1, secret, secretlen);
+    key1_len = Hash(session_key1, secret, secretlen);
 
     // ricezione del nonce che verrà usato per generare l'altra chiave di sessione
     // utile solo quando l'handshake è seguito dal login
@@ -157,6 +157,7 @@ void handshake(char * username,int sd,unsigned char* session_key1,int digestlen,
     EVP_PKEY_free(DH_keys);
     EVP_PKEY_free(DH_server_keys);
     EVP_PKEY_free(priv_key);
+    printf("Handshake completed.\n");
 }
 
 void registration(char email[],char username[],char password[],int sd){
@@ -188,10 +189,10 @@ void registration(char email[],char username[],char password[],int sd){
     
     keys_generation(username);
     unsigned char * session_key1 = (unsigned char*)malloc(EVP_MD_size(EVP_sha256()));
-    int digestlen;
+    int key1_len;
     char nonce_buf[11];
-    handshake(username, sd,session_key1,digestlen,nonce_buf);     // esecuzione protocollo di handshake
-    printf("Handshake completed.\n");
+    handshake(username, sd,session_key1,key1_len,nonce_buf);     // esecuzione protocollo di handshake
+    
 
     printf("Registration start...\n");
     // mandare credenziali cifrate e con firma
@@ -278,6 +279,28 @@ void registration(char email[],char username[],char password[],int sd){
     }
 }
 
+void login(char username[],char password[]){
+    int ret;
+
+    //inserire credenziali
+    printf("Insert the following parameters\n");
+    do{
+        printf("Username: "); 
+        fgets(username, US_LENGTH, stdin); 
+        username[strcspn(username, "\n")] = '\0';
+        fflush(stdin);
+    }while(!checkInput(username));
+
+    do{
+        printf("Password: ");  
+        fgets(password, MAX_LENGTH, stdin); 
+        password[strcspn(password, "\n")] = '\0';
+        fflush(stdin);
+    }while(!checkInput(password));
+
+
+}
+
 void help(){
     printf("[1] List(int n): lists the latest n available messages in the BBS");
     printf("\n[2] Get(int msg_id): downloads from the BBS the message specified by msg_id");
@@ -292,15 +315,6 @@ void menu_operation(){
     printf("\n[4] Help\n");
 }
 
-void menu_registration(){
-    printf("Please to interact with the BBS, register to the system");
-    printf("\n [email_address] [nickname] [password] ");
-}
-
-void menu_login(){
-    printf("Please login to the system");
-    printf("\n [nickname] [password] ");
-}
 
 int main(int argc, char** argv){
     int ret,sd, len;
@@ -311,7 +325,10 @@ int main(int argc, char** argv){
     char email[MAX_LENGTH];
     char username[US_LENGTH];
     char password[MAX_LENGTH];
-
+    unsigned char *session_key1 = (unsigned char*)malloc(EVP_MD_size(EVP_sha256()));
+    unsigned char *session_key2 = (unsigned char*)malloc(EVP_MD_size(EVP_sha256()));
+    int key1_len;
+    char nonce_buf[11];
     if (argc != 2){
         printf("Invalid parameters -> Use ./dev <porta>\n");
         fflush(stdout);
@@ -345,8 +362,51 @@ int main(int argc, char** argv){
         if(var == 1){
             registration(email, username, password,sd);
         }else if(var == 2){
-            //login(email,username,password);
-            //handshake();
+
+            login(username,password);
+            handshake(username, sd,session_key1,key1_len,nonce_buf);
+            char * pswd_Hash= (unsigned char*)malloc(EVP_MD_size(EVP_sha256()));
+            int pswd_size=Hash(pswd_Hash,password,strlen(password));
+            char key2[267];
+            sprintf(key2,"%s%s",pswd_Hash,nonce_buf);
+            int key2_size=Hash(session_key2,key2,267);
+            // Session key2 inizialized
+            char HP_buf[256+US_LENGTH+3]; 
+            sprintf(HP_buf,"%s %s",username,pswd_Hash);
+            int outlen;
+            char mcBuf[256];
+            HMAC(EVP_sha256(), session_key2, key2_size, HP_buf,(256+US_LENGTH+1), mcBuf, &outlen);       
+            //Encryption of Us, PswdHas, HMAC
+            char plaintext[256*2+US_LENGTH+5];
+            sprintf(plaintext,"%s %s",HP_buf,mcBuf);
+            printf("plaintext: %s\n",plaintext);
+            unsigned char * ciphertext = (unsigned char*)malloc(sizeof(plaintext) + 16);
+            int cipherlen;
+            EVP_CIPHER_CTX* ctx;
+            ctx = EVP_CIPHER_CTX_new();
+            /* Encryption (initialization + single update + finalization */
+            EVP_EncryptInit(ctx, EVP_aes_256_ecb(), session_key1, NULL);
+            EVP_EncryptUpdate(ctx, ciphertext, &outlen,(unsigned char*)plaintext, sizeof(plaintext));
+            cipherlen = outlen;
+            EVP_EncryptFinal(ctx, ciphertext + cipherlen, &outlen);
+            cipherlen += outlen;
+            /* Context deallocation */
+            EVP_CIPHER_CTX_free(ctx);
+            printf("Messagge Encrypted\n");
+            sendMsg("LOGIN",sd,6);
+            sendMsg(ciphertext,sd,cipherlen);
+            printf("Messagge sended \n");
+            //
+            char recvBuf[10];
+            if(recvMsg(recvBuf,sd)==-1){
+                printf("Login Failed\n Exit\n");
+                close(sd);
+                exit(1);
+            }
+            if(strcmp(recvBuf,"LOGINOK")==0){
+                printf("Login successfully completed\n");
+            }
+            
         }else if(var == 3){
             //Funzione di exit
             printf("Closing Application\n");
@@ -354,6 +414,9 @@ int main(int argc, char** argv){
             return 0;
         }
         var=start();
+        strcpy(username,"");
+        strcpy(email,"");
+        strcpy(password,"");
     } while(1);
 
     close(sd);
