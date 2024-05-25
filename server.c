@@ -231,7 +231,7 @@ int main(int argc, char** argv){
                         //fulfil the data structure for the session parameters of the user
                         struct secret_Params * temp;
                         temp=malloc(sizeof( struct secret_Params));
-                        temp->nonce = nonce_buf;
+                        temp->nonce = strdup(nonce_buf);
                         temp->sd=i;
                         temp->session_key1 = digest; 
                         temp->session_key2 = NULL;
@@ -323,7 +323,7 @@ int main(int argc, char** argv){
                         char email [MAX_LENGTH];
                         unsigned char pswd[256];
                         //parse del plaintext 
-                        sscanf(plaintext,"%19s %49s %255s",username,email,pswd);
+                        sscanf(plaintext,"%s %s %s",username,email,pswd);
                         struct client * app=users;  
                         while(app!=NULL){
                             if(strcmp(app->username,username)==0 || strcmp(app->email,email)==0){
@@ -380,7 +380,7 @@ int main(int argc, char** argv){
                                 }
                                 app=malloc(sizeof(struct client));
                                 app->username = strdup(username);         
-                                app->pswdHash = strdup(pswd);         
+                                app->pswdHash = strdup(pswd);       
                                 app->email = strdup(email);
                                 
                                 if(users == NULL){
@@ -412,12 +412,13 @@ int main(int argc, char** argv){
                         }
                         printf("Ciphertext of client's credentials received correctly\n");
 
-                        struct secret_Params * temp=sessionParam;
-                        while(temp!=NULL){
-                            if(temp->sd==i){
-                                session_key1=strdup(temp->session_key1);
+                        struct secret_Params * temp_session=sessionParam;
+                        while(temp_session!=NULL){
+                            if(temp_session->sd==i){
+                                session_key1=strdup(temp_session->session_key1);
+                                break;
                             }
-                            temp=temp->next;
+                            temp_session=temp_session->next;
                         }
                         unsigned char * plaintext=malloc(US_LENGTH +256*2+5);
                         int outlen;
@@ -440,18 +441,19 @@ int main(int argc, char** argv){
                         char Hpswd [256];
                         char Hmac [256];
                         sscanf(plaintext,"%s %s %s",username,Hpswd,Hmac);
+                        
                         unsigned char *session_key2 = (unsigned char*)malloc(EVP_MD_size(EVP_sha256()));
-                        printf("Username:%s\n",username);
                         struct client * temp_client=users;
+                        int key2_size;
                         while(temp_client!=NULL){
                             if(strcmp(temp_client->username,username)==0){
                                 printf("Utente trovato\n");
-                                if(strcmp(temp_client->pswdHash,Hpswd)==0){
+                                if(CRYPTO_memcmp(temp_client->pswdHash, Hpswd,EVP_MD_size(EVP_sha256())) == 0){
                                     printf("Password Corrisponding\n");
                                     char key2[267];
-                                    sprintf(key2,"%s%s",Hpswd,temp->nonce);
-                                    int key2_size=Hash(session_key2,key2,267);
-                                    temp->session_key2=session_key2;
+                                    sprintf(key2,"%s%s",Hpswd,temp_session->nonce);
+                                    key2_size=Hash(session_key2,key2,267);
+                                    temp_session->session_key2=session_key2;
                                     break;
                                 }
                             }
@@ -465,10 +467,12 @@ int main(int argc, char** argv){
                         }
                         char HP_buf[256+US_LENGTH+3]; 
                         sprintf(HP_buf,"%s %s",username,Hpswd);
+                        printf("%d\n",key2_size);
                         char mcBuf[256];
                         printf("Prima di HMAC \n");
-                        HMAC(EVP_sha256(), session_key2, 256, HP_buf,256+US_LENGTH+3, mcBuf, &outlen);
-                        if(strcmp(mcBuf,Hmac)!=0){
+                        HMAC(EVP_sha256(), session_key2, key2_size, HP_buf,(256+US_LENGTH+3), mcBuf, &outlen);
+                        printf("session key %s\n",session_key2);
+                        if(CRYPTO_memcmp(Hmac, mcBuf,EVP_MD_size(EVP_sha256())) != 0){
                             printf("Mac Verification failed\n");
                             close(i);
                             FD_CLR(i,&master);
@@ -476,8 +480,7 @@ int main(int argc, char** argv){
                         }
                         printf("Mac Verification completed\n");
                         sendMsg("LOGINOK",i,8);
-
-
+                        strcpy(buffer,"");
                     }                
                 }
             }

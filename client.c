@@ -199,6 +199,7 @@ void registration(char email[],char username[],char password[],int sd){
     unsigned char * pswdHash;
     pswdHash = (unsigned char*)malloc(EVP_MD_size(EVP_sha256()));
     int pswdHashLen=Hash(pswdHash,password,strlen(password));
+    
     unsigned char sendBuffer[MAX_LENGTH +US_LENGTH+256];
     sprintf(sendBuffer,"%s %s %s",username,email,pswdHash);
     
@@ -365,7 +366,7 @@ int main(int argc, char** argv){
 
             login(username,password);
             handshake(username, sd,session_key1,key1_len,nonce_buf);
-            char * pswd_Hash= (unsigned char*)malloc(EVP_MD_size(EVP_sha256()));
+            unsigned char * pswd_Hash= (unsigned char*)malloc(EVP_MD_size(EVP_sha256()));
             int pswd_size=Hash(pswd_Hash,password,strlen(password));
             char key2[267];
             sprintf(key2,"%s%s",pswd_Hash,nonce_buf);
@@ -375,11 +376,12 @@ int main(int argc, char** argv){
             sprintf(HP_buf,"%s %s",username,pswd_Hash);
             int outlen;
             char mcBuf[256];
-            HMAC(EVP_sha256(), session_key2, key2_size, HP_buf,(256+US_LENGTH+1), mcBuf, &outlen);       
+            HMAC(EVP_sha256(), session_key2, key2_size, HP_buf,(256+US_LENGTH+3), mcBuf, &outlen); 
+            printf("session key %s\n",session_key2);
+            printf("%d\n",key2_size);
             //Encryption of Us, PswdHas, HMAC
             char plaintext[256*2+US_LENGTH+5];
             sprintf(plaintext,"%s %s",HP_buf,mcBuf);
-            printf("plaintext: %s\n",plaintext);
             unsigned char * ciphertext = (unsigned char*)malloc(sizeof(plaintext) + 16);
             int cipherlen;
             EVP_CIPHER_CTX* ctx;
