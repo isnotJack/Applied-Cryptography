@@ -11,6 +11,13 @@
 #include <unistd.h>
 #include <sys/time.h>
 #include <regex.h>
+#include <malloc.h>
+#include <stdio.h>
+#include <openssl/hmac.h>
+
+
+
+
 
 
 int MAX_LENGTH = 50;
@@ -65,6 +72,7 @@ void DH_parameter_generation(){
     sprintf(command,"openssl dhparam -out dh_param.pem -2 -C 2048");
     system(command);
     }   
+
 }
 
 
@@ -282,20 +290,6 @@ EVP_PKEY * retrieve_pubkey(char * username, int sd){
     return false;
  }
 
-// void retrieve_pubkey(char * username, char * pubkey){
-//     char path[100];
-//      if(strcmp(username,"server")==0){
-//          sprintf(path, "./keys_server/rsa_pubkey_%s.pem",username);
-//     }else{
-//         sprintf(path, "./keys_clients/rsa_pubkey_%s.pem",username);
-//     }
-//     FILE* file = fopen(path, "r");
-//     if(!file) { 
-//         printf("Error opening the file\n");
-//         exit(1);
-//     }
-//     fread(pubkey,1,KEY_LENGTH,file);
-// }
 
 void insertFile(char *buffer,int size, int i){
     char path[100];

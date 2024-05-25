@@ -1,5 +1,4 @@
 #include "utility.h"
-EVP_PKEY * priv_key;
 // definizione variabili per Diffie-Hellman
 EVP_PKEY * dh_params;      
 
@@ -102,6 +101,7 @@ int main(int argc, char** argv){
                     if(strcmp(buffer,"HANDSHAKE")==0){
                         printf("Handshake start...\n");
                         srand(time(NULL));
+                        EVP_PKEY * priv_key;
                         EVP_PKEY_CTX * DH_ctx; //--> Context for Diffi Hellman
                         EVP_PKEY* DH_keys; // --> Contains both 'a' and 'G^a'
                         // ricezione chiave pubblica del client (certificato)
@@ -115,15 +115,14 @@ int main(int argc, char** argv){
                         printf("Client certificate received \n");
 
                         // Invio chiave pubblica server   
-
+                        
                         // Genearation of public/private pair
                         DH_ctx = EVP_PKEY_CTX_new(dh_params, NULL);
+                        priv_key = retrieve_privkey("server");
                         DH_keys = NULL;
                         DH_PubPriv(dh_params, &DH_keys, DH_ctx);   // generazione parametro privato b e pubblic g^b
                         printf("Private/public pair for DH generated\n");
-                        priv_key = retrieve_privkey("server");
                         EVP_PKEY_CTX_free(DH_ctx);
-
                         unsigned char* signature;
                         signature = malloc(EVP_PKEY_size(priv_key));
                         int signature_length=Digital_Signature(priv_key, DH_keys, signature);
@@ -255,6 +254,7 @@ int main(int argc, char** argv){
                         printf("Handshake completed.\n");
                         strcpy(buffer,"");
                     }else if(strcmp(buffer,"REGISTRATION")==0){
+                         
                         printf("Registration start...\n");
                         EVP_PKEY * C_pub_key=retrieve_pubkey("server",i);
                         unsigned char * ciphertext = (unsigned char*)malloc(MAX_LENGTH+US_LENGTH+256 + 16); //--> Credenziali cifrate
@@ -301,7 +301,7 @@ int main(int argc, char** argv){
                             FD_CLR(i, &master);
                             continue;
                         }
-                        unsigned char * plaintext=malloc(MAX_LENGTH + US_LENGTH +256);
+                        unsigned char * plaintext=malloc(MAX_LENGTH + US_LENGTH +256+5);
                         int outlen;
                         int plainlen;
                         EVP_CIPHER_CTX* ctx;
@@ -318,17 +318,16 @@ int main(int argc, char** argv){
                         plainlen += outlen;
                         EVP_CIPHER_CTX_free(ctx);
                         
+                        
                         char username [US_LENGTH];
                         char email [MAX_LENGTH];
                         unsigned char pswd[256];
                         //parse del plaintext 
-                        sscanf(plaintext,"%s %s %s",username,email,pswd);
-                      
-                        //ricerca
-                        struct client * app=users;
+                        sscanf(plaintext,"%19s %49s %255s",username,email,pswd);
+                        struct client * app=users;  
                         while(app!=NULL){
-                            if(strcmp(app->username,username)==0 || strcmp(app->pswdHash,pswd)==0){
-                                printf("Registration Failed \n Credential already used \n");
+                            if(strcmp(app->username,username)==0 || strcmp(app->email,email)==0){
+                                printf("Registration Failed \nCredential already used \n");
                                 char msg[]="FAILED\0";
                                 ret = sendMsg(msg,i,strlen(msg));
                                 if (ret == -1){
@@ -380,9 +379,9 @@ int main(int argc, char** argv){
                                     continue;
                                 }
                                 app=malloc(sizeof(struct client));
-                                app->pswdHash=pswd;
-                                app->username=username;
-                                app->email=email;
+                                app->username = strdup(username);         
+                                app->pswdHash = strdup(pswd);         
+                                app->email = strdup(email);
                                 
                                 if(users == NULL){
                                     app->next=NULL;
@@ -399,9 +398,86 @@ int main(int argc, char** argv){
                         else 
                             printf("Parametri non trovati\n");
                         printf("User registration completed.\n");
-                        strcpy(buffer,"");
-                    }else{
                         
+                        strcpy(buffer,"");
+                    }else if(strcmp(buffer,"LOGIN")==0){
+                        printf("Starting Login Phase \n");
+                        unsigned char * session_key1=(unsigned char*)malloc(EVP_MD_size(EVP_sha256())); 
+                        unsigned char * ciphertext = (unsigned char*)malloc(US_LENGTH+256*2+5+16); //--> Credenziali cifrate
+                        int cipherlen = recvMsg(ciphertext,i);
+                        if(cipherlen==-1){
+                            close(i);
+                            FD_CLR(i, &master);
+                            continue;
+                        }
+                        printf("Ciphertext of client's credentials received correctly\n");
+
+                        struct secret_Params * temp=sessionParam;
+                        while(temp!=NULL){
+                            if(temp->sd==i){
+                                session_key1=strdup(temp->session_key1);
+                            }
+                            temp=temp->next;
+                        }
+                        unsigned char * plaintext=malloc(US_LENGTH +256*2+5);
+                        int outlen;
+                        int plainlen;
+                        EVP_CIPHER_CTX* ctx;
+                        ctx = EVP_CIPHER_CTX_new();
+                        EVP_DecryptInit(ctx, EVP_aes_256_ecb(), session_key1, NULL);
+                        EVP_DecryptUpdate(ctx, plaintext, &outlen, ciphertext, cipherlen);
+                        plainlen = outlen;
+                        ret = EVP_DecryptFinal(ctx, plaintext + plainlen, &outlen);
+                        if(ret == 0){
+                            printf("Decryption Error \n");
+                        }else{
+                         printf("Correct Decryption: username, H(password), HMAC\n");
+                        }
+                        plainlen += outlen;
+                        EVP_CIPHER_CTX_free(ctx);
+                        
+                        char username [US_LENGTH];
+                        char Hpswd [256];
+                        char Hmac [256];
+                        sscanf(plaintext,"%s %s %s",username,Hpswd,Hmac);
+                        unsigned char *session_key2 = (unsigned char*)malloc(EVP_MD_size(EVP_sha256()));
+                        printf("Username:%s\n",username);
+                        struct client * temp_client=users;
+                        while(temp_client!=NULL){
+                            if(strcmp(temp_client->username,username)==0){
+                                printf("Utente trovato\n");
+                                if(strcmp(temp_client->pswdHash,Hpswd)==0){
+                                    printf("Password Corrisponding\n");
+                                    char key2[267];
+                                    sprintf(key2,"%s%s",Hpswd,temp->nonce);
+                                    int key2_size=Hash(session_key2,key2,267);
+                                    temp->session_key2=session_key2;
+                                    break;
+                                }
+                            }
+                            temp_client=temp_client->next;
+                        }
+                        if(temp_client ==NULL){
+                            printf("Utente non trovato\n");
+                            close(i);
+                            FD_CLR(i,&master);
+                            continue;
+                        }
+                        char HP_buf[256+US_LENGTH+3]; 
+                        sprintf(HP_buf,"%s %s",username,Hpswd);
+                        char mcBuf[256];
+                        printf("Prima di HMAC \n");
+                        HMAC(EVP_sha256(), session_key2, 256, HP_buf,256+US_LENGTH+3, mcBuf, &outlen);
+                        if(strcmp(mcBuf,Hmac)!=0){
+                            printf("Mac Verification failed\n");
+                            close(i);
+                            FD_CLR(i,&master);
+                            continue;
+                        }
+                        printf("Mac Verification completed\n");
+                        sendMsg("LOGINOK",i,8);
+
+
                     }                
                 }
             }
