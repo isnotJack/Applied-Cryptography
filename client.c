@@ -368,8 +368,6 @@ int main(int argc, char** argv){
             handshake(username, sd,session_key1,key1_len,nonce_buf);
             unsigned char * pswd_Hash= (unsigned char*)malloc(EVP_MD_size(EVP_sha256()));
             int pswd_size=Hash(pswd_Hash,password,strlen(password));
-            printf("pswdsize %d\n strlen %d\n", pswd_size, strlen(pswd_Hash));
-            //char key2[267];
             char key2[43];
             sprintf(key2,"%s%s",pswd_Hash,nonce_buf);
             int key2_size=Hash(session_key2,key2,strlen(key2));
@@ -377,15 +375,12 @@ int main(int argc, char** argv){
             char HP_buf[32+US_LENGTH+1]; 
             sprintf(HP_buf,"%s %s",username,pswd_Hash);
             int outlen;
-            char mcBuf[33];
-            HMAC(EVP_sha256(), session_key2, key2_size, HP_buf,(32+US_LENGTH+3), mcBuf, &outlen); 
-            printf("session key %s\n",session_key2);
-            printf("Key2 %s\n",key2);
-            printf("Hpswd %s\n",pswd_Hash);
+            char mcBuf[32];
+            HMAC(EVP_sha256(), session_key2, key2_size, HP_buf,strlen(HP_buf), mcBuf, &outlen); 
+            //mcBuf[32]='\0';
             //Encryption of Us, PswdHas, HMAC
-            char plaintext[32*2+US_LENGTH+3];
-            mcBuf[33]='\0';
-            sprintf(plaintext,"%s %s",HP_buf,mcBuf);
+            char plaintext[32*2+US_LENGTH+1];
+            sprintf(plaintext,"%s%s",HP_buf,mcBuf);
             unsigned char * ciphertext = (unsigned char*)malloc(sizeof(plaintext) + 16);
             int cipherlen;
             EVP_CIPHER_CTX* ctx;
