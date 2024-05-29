@@ -85,7 +85,7 @@ int Hash(unsigned char * digest, unsigned char *msg ,int msg_len){
     int digestlen;
     EVP_MD_CTX* ctx;
     ctx = EVP_MD_CTX_new();
-    /* Hashing (initialization + single update + finalization */
+    /* Hashing initialization + single update + finalization */
     EVP_DigestInit(ctx, EVP_sha256());
     EVP_DigestUpdate(ctx, (unsigned char*)msg, msg_len);
     EVP_DigestFinal(ctx, digest, &digestlen);
