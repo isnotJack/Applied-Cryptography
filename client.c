@@ -198,9 +198,11 @@ void registration(char email[],char username[],char password[],int sd){
     // mandare credenziali cifrate e con firma
     unsigned char * pswdHash;
     pswdHash = (unsigned char*)malloc(EVP_MD_size(EVP_sha256()));
+    printf("Password %s\n ,password len %ld\n",password,strlen(password));
     int pswdHashLen=Hash(pswdHash,password,strlen(password));
-    
-    unsigned char sendBuffer[MAX_LENGTH +US_LENGTH+256];
+    pswdHash[32]='\0';
+    printf("Reg password %s\n",pswdHash);
+    unsigned char sendBuffer[MAX_LENGTH +US_LENGTH+35];
     sprintf(sendBuffer,"%s %s %s",username,email,pswdHash);
     
     EVP_PKEY * priv_key=retrieve_privkey(username);
@@ -368,6 +370,7 @@ int main(int argc, char** argv){
             handshake(username, sd,session_key1,key1_len,nonce_buf);
             unsigned char * pswd_Hash= (unsigned char*)malloc(EVP_MD_size(EVP_sha256()));
             int pswd_size=Hash(pswd_Hash,password,strlen(password));
+            pswd_Hash[32]='\0';
             char key2[43];
             sprintf(key2,"%s%s",pswd_Hash,nonce_buf);
             int key2_size=Hash(session_key2,key2,strlen(key2));
@@ -376,11 +379,12 @@ int main(int argc, char** argv){
             sprintf(HP_buf,"%s %s",username,pswd_Hash);
             int outlen;
             char mcBuf[32];
-            HMAC(EVP_sha256(), session_key2, key2_size, HP_buf,strlen(HP_buf), mcBuf, &outlen); 
+            HMAC(EVP_sha256(), session_key2, key2_size, HP_buf,(strlen(username)+33), mcBuf, &outlen); 
             //mcBuf[32]='\0';
             //Encryption of Us, PswdHas, HMAC
-            char plaintext[32*2+US_LENGTH+1];
-            sprintf(plaintext,"%s%s",HP_buf,mcBuf);
+            char plaintext[32*2+US_LENGTH+2];
+            sprintf(plaintext,"%s %s%s",username,pswd_Hash,mcBuf);
+            plaintext[strlen(username)+1+64]='\0';
             unsigned char * ciphertext = (unsigned char*)malloc(sizeof(plaintext) + 16);
             int cipherlen;
             EVP_CIPHER_CTX* ctx;
@@ -389,7 +393,12 @@ int main(int argc, char** argv){
             EVP_EncryptInit(ctx, EVP_aes_256_ecb(), session_key1, NULL);
             EVP_EncryptUpdate(ctx, ciphertext, &outlen,(unsigned char*)plaintext, sizeof(plaintext));
             cipherlen = outlen;
-            EVP_EncryptFinal(ctx, ciphertext + cipherlen, &outlen);
+            ret=EVP_EncryptFinal(ctx, ciphertext + cipherlen, &outlen);
+            if(ret == 0){
+                printf("Encryption Error \n");
+            }else{
+            printf("Correct Encryption\n");
+            }
             cipherlen += outlen;
             /* Context deallocation */
             EVP_CIPHER_CTX_free(ctx);
@@ -397,6 +406,7 @@ int main(int argc, char** argv){
             sendMsg("LOGIN",sd,6);
             sendMsg(ciphertext,sd,cipherlen);
             printf("Messagge sended \n");
+            printf("Key2 %s\n",key2);
             //
             char recvBuf[10];
             if(recvMsg(recvBuf,sd)==-1){
