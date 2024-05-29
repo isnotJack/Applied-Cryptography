@@ -392,7 +392,7 @@ int main(int argc, char** argv){
                                 }
                             remove(path);  
                         }
-                        //printf("%d\n",sessionParam);
+                        
                         if(removeSessionParam(i,&sessionParam))
                             printf("Parametri deallocati\n");
                         else 
@@ -403,7 +403,7 @@ int main(int argc, char** argv){
                     }else if(strcmp(buffer,"LOGIN")==0){
                         printf("Starting Login Phase \n");
                         unsigned char * session_key1=(unsigned char*)malloc(EVP_MD_size(EVP_sha256())); 
-                        unsigned char * ciphertext = (unsigned char*)malloc(US_LENGTH+32*2+4+16); //--> Credenziali cifrate
+                        unsigned char * ciphertext = (unsigned char*)malloc(US_LENGTH+32*2+1+16); //--> Credenziali cifrate
                         int cipherlen = recvMsg(ciphertext,i);
                         if(cipherlen==-1){
                             close(i);
@@ -420,7 +420,7 @@ int main(int argc, char** argv){
                             }
                             temp_session=temp_session->next;
                         }
-                        unsigned char * plaintext=malloc(US_LENGTH +32*2+3);
+                        unsigned char * plaintext=malloc(US_LENGTH +32*2+1);
                         int outlen;
                         int plainlen;
                         EVP_CIPHER_CTX* ctx;
@@ -439,14 +439,23 @@ int main(int argc, char** argv){
                         
                         char username [US_LENGTH];
                         char Hpswd [33];
-                        char Hmac [33];
-                        char temp[32*2+2];
-                        sscanf(plaintext,"%s %65s",username,temp);
-                        printf("Temp %s\n",temp);
-                        sscanf(temp,"%s %s",Hpswd,Hmac);
-                        //Hpswd[33]='\0';                     
-   
-                        printf("Plaintext %s\n Hpswd %s\n",plaintext,Hpswd);
+                        char Hmac [32];
+                        
+                        sscanf(plaintext,"%s",username);
+
+                        int start=strlen(username)+1;
+                        int end =start+64;
+                        for(int i=start;i<end;i++){
+                            if(i<(32+start))
+                                Hpswd[i-start]=plaintext[i];
+                            else 
+                                Hmac[i-32-start]=plaintext[i];
+                                
+                        }     
+                        // Hmac[32]='\0';
+                         Hpswd[32]='\0';
+                        printf("Hpswd %s\n Plaintext %s\n strlen(plaintext) %ld\n",Hpswd,plaintext,strlen(plaintext));
+
                         unsigned char *session_key2 = (unsigned char*)malloc(EVP_MD_size(EVP_sha256()));
                         struct client * temp_client=users;
                         int key2_size;
@@ -456,9 +465,9 @@ int main(int argc, char** argv){
                                 if(CRYPTO_memcmp(temp_client->pswdHash, Hpswd,EVP_MD_size(EVP_sha256())) == 0){
                                     printf("Password Corrisponding\n");
                                     char key2[43];
-                                    sprintf(key2,"%s%s",Hpswd,temp_session->nonce);
-                                    key2_size=Hash(session_key2,key2,strlen(key2));
+                                    sprintf(key2,"%32s%s",Hpswd,temp_session->nonce);
                                     printf("Key2 %s\n",key2);
+                                    key2_size=Hash(session_key2,key2,strlen(key2));
                                     temp_session->session_key2=session_key2;
                                     break;
                                 }
@@ -471,14 +480,15 @@ int main(int argc, char** argv){
                             FD_CLR(i,&master);
                             continue;
                         }
-                        char HP_buf[32+US_LENGTH+1]; 
-                        sprintf(HP_buf,"%s %s",username,Hpswd);
-                        char mcBuf[32];
-                        printf("Prima di HMAC \n");
-                        HMAC(EVP_sha256(), session_key2, key2_size, HP_buf,(32+US_LENGTH+1), mcBuf, &outlen);
-                        printf("session key %s\n",session_key2);
-                        printf("Hmac %s\n mcBuf %s\n",Hmac,mcBuf);
-                        if(memcmp(Hmac, mcBuf,32) != 0){
+                        unsigned char HP_buf[32+US_LENGTH+2]; 
+                        sprintf(HP_buf,"%s %32s",username,Hpswd);
+                        char mcBuf[33];
+                        mcBuf[32]='\0';
+                        int mac_len;
+                        HMAC(EVP_sha256(), session_key2, key2_size, HP_buf,(start+32), mcBuf, &mac_len);
+                        printf("Hmac %s\n MacBuf %s\n",Hmac,mcBuf);
+                        printf("Hp_buf %s\n",HP_buf);
+                        if(CRYPTO_memcmp(Hmac, mcBuf,EVP_MD_size(EVP_sha256())) != 0){
                             printf("Mac Verification failed\n");
                             close(i);
                             FD_CLR(i,&master);
