@@ -6,6 +6,7 @@ EVP_PKEY * pubkey;         // per contenere la chiave pubblica da inviare al ser
 EVP_PKEY * serverKey;      // per la chiave pubblica del server (utile per verificare la sua firma)
 // Parametri Diffie-Hellman
 EVP_PKEY * dh_params;
+int seq_nonce=0;    
 
 int start(){
     int choice;
@@ -48,8 +49,6 @@ void handshake(char * username,int sd,unsigned char* session_key1,int key1_len,c
         exit(1);
     }
     printf("RSA public key sent correctly\n");
-
-    //printf("Dopo send public key\n");
 
     //Chiave pubblica server letta da file del server "keys_server" (BARBINO)
     serverKey = retrieve_pubkey("server",-1);
@@ -198,12 +197,15 @@ void registration(char email[],char username[],char password[],int sd){
     // mandare credenziali cifrate e con firma
     unsigned char * pswdHash;
     pswdHash = (unsigned char*)malloc(EVP_MD_size(EVP_sha256()));
-    printf("Password %s\n ,password len %ld\n",password,strlen(password));
     int pswdHashLen=Hash(pswdHash,password,strlen(password));
     pswdHash[32]='\0';
-    printf("Reg password %s\n",pswdHash);
-    unsigned char sendBuffer[MAX_LENGTH +US_LENGTH+35];
-    sprintf(sendBuffer,"%s %s %s",username,email,pswdHash);
+    unsigned char * hash_buf=(unsigned char*)malloc(65);
+    for (int i = 0; i < pswdHashLen; ++i) {
+        sprintf(hash_buf+ (i * 2),"%02X", pswdHash[i]);
+    }
+    hash_buf[64]='\0';
+    unsigned char sendBuffer[MAX_LENGTH +US_LENGTH+67];
+    sprintf(sendBuffer,"%s %s %s",username,email,hash_buf);
     
     EVP_PKEY * priv_key=retrieve_privkey(username);
     unsigned char * ciphertext = (unsigned char*)malloc(sizeof(sendBuffer) + 16); //--> Credenziali cifrate
@@ -365,26 +367,32 @@ int main(int argc, char** argv){
         if(var == 1){
             registration(email, username, password,sd);
         }else if(var == 2){
-
             login(username,password);
             handshake(username, sd,session_key1,key1_len,nonce_buf);
             unsigned char * pswd_Hash= (unsigned char*)malloc(EVP_MD_size(EVP_sha256()));
             int pswd_size=Hash(pswd_Hash,password,strlen(password));
+            unsigned char * hash_buf=(unsigned char*)malloc(65);
             pswd_Hash[32]='\0';
-            char key2[43];
-            sprintf(key2,"%s%s",pswd_Hash,nonce_buf);
+            for (int i = 0; i < pswd_size; ++i) {
+                sprintf(hash_buf+ (i * 2),"%02X", pswd_Hash[i]);
+            }
+            char key2[75];
+            sprintf(key2,"%s%s",hash_buf,nonce_buf);
             int key2_size=Hash(session_key2,key2,strlen(key2));
             // Session key2 inizialized
-            char HP_buf[32+US_LENGTH+1]; 
-            sprintf(HP_buf,"%s %s",username,pswd_Hash);
+            char HP_buf[64+US_LENGTH+1]; 
+            sprintf(HP_buf,"%s %s",username,hash_buf);
             int outlen;
             char mcBuf[32];
-            HMAC(EVP_sha256(), session_key2, key2_size, HP_buf,(strlen(username)+33), mcBuf, &outlen); 
-            //mcBuf[32]='\0';
+            HMAC(EVP_sha256(), session_key2, key2_size, HP_buf,(strlen(username)+65), mcBuf, &outlen); 
             //Encryption of Us, PswdHas, HMAC
-            char plaintext[32*2+US_LENGTH+2];
-            sprintf(plaintext,"%s %s%s",username,pswd_Hash,mcBuf);
-            plaintext[strlen(username)+1+64]='\0';
+            unsigned char exHmac[64];
+            for (int i = 0; i < 32; ++i) {
+                sprintf(exHmac+ (i * 2),"%02X", mcBuf[i]);
+            }
+            char plaintext[64*2+US_LENGTH+2];
+            sprintf(plaintext,"%s %s%s",username,hash_buf,exHmac);
+            plaintext[strlen(username)+1+128]='\0';
             unsigned char * ciphertext = (unsigned char*)malloc(sizeof(plaintext) + 16);
             int cipherlen;
             EVP_CIPHER_CTX* ctx;
@@ -406,8 +414,6 @@ int main(int argc, char** argv){
             sendMsg("LOGIN",sd,6);
             sendMsg(ciphertext,sd,cipherlen);
             printf("Messagge sended \n");
-            printf("Key2 %s\n",key2);
-            //
             char recvBuf[10];
             if(recvMsg(recvBuf,sd)==-1){
                 printf("Login Failed\n Exit\n");
@@ -416,6 +422,27 @@ int main(int argc, char** argv){
             }
             if(strcmp(recvBuf,"LOGINOK")==0){
                 printf("Login successfully completed\n");
+                seq_nonce=atoi(nonce_buf);
+                printf("seq_nonce %d\n",seq_nonce);
+                while (1){
+                    int choice;
+                    menu_operation();
+                    scanf("%d",choice);
+                    if(choice == 1){
+                        
+                    }else if(choice == 2){
+                        
+
+                    }else if(choice == 3){
+                        
+                    }else if(choice == 4){
+                        help();
+                    }else{
+                        printf("Not valid input \n");
+                    }
+                }
+                
+
             }
             
         }else if(var == 3){

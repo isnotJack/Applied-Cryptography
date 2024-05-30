@@ -25,13 +25,15 @@ int KEY_LENGTH = 1024;
 int PUB_CMD_LENGTH = 129;
 int PRIV_CMD_lENGTH = 75;
 int US_LENGTH = 20;
-
+int MSG_LENGHT = 2048;
 struct secret_Params
 {
     int sd;
     unsigned char * session_key1;   // used to encrypt messages
     unsigned char * session_key2;   // used for message authentication
     unsigned char * nonce;
+    bool is_logged;
+    int seq_nonce;
     struct secret_Params * next;
 };
 
@@ -60,6 +62,97 @@ long recvMsg(char * buffer,int sd){
         return ret;
     }
     return len;
+}
+
+int messaggeReceipts(char * msg,unsigned char * session_key1,unsigned char * session_key2,int sd,int seq_nonce){
+    unsigned char * ciphertext = (unsigned char*)malloc(16+64+MSG_LENGHT); //--> Credenziali cifrate
+    int cipherlen = recvMsg(ciphertext,sd);
+    if(cipherlen==-1){
+       return -1;
+    }
+    unsigned char * plaintext=malloc(64+MSG_LENGHT);
+    int outlen;
+    int plainlen;
+    EVP_CIPHER_CTX* ctx;
+    ctx = EVP_CIPHER_CTX_new();
+    EVP_DecryptInit(ctx, EVP_aes_256_ecb(), session_key1, NULL);
+    EVP_DecryptUpdate(ctx, plaintext, &outlen, ciphertext, cipherlen);
+    plainlen = outlen;
+    int ret = EVP_DecryptFinal(ctx, plaintext + plainlen, &outlen);
+    plainlen += outlen;
+    if(ret == 0){
+        printf("Decryption Error \n");
+    }else{
+        printf("Correct Decryption: username, H(password), HMAC\n");
+    }
+    EVP_CIPHER_CTX_free(ctx);
+    char HP_buf[MSG_LENGHT+11];
+    unsigned char recHmac[65];
+    sscanf(plaintext,"%s %s",HP_buf,recHmac);
+    recHmac[64]='\0';
+    int HP_buf_len=strlen(HP_buf);
+    HP_buf[HP_buf_len]='\0';
+    char mcBuf[33];
+    int mac_len;
+    HMAC(EVP_sha256(), session_key2, 32, HP_buf,HP_buf_len, mcBuf, &mac_len);
+    mcBuf[32]='\0';
+    unsigned char exHmac[64];
+    for (int i = 0; i < 32; ++i) {
+        sprintf(exHmac+ (i * 2),"%02X", mcBuf[i]);
+    }
+    if(CRYPTO_memcmp(recHmac, exHmac,64) != 0){
+        //GESTIONE ERRORE
+        return -1;
+    }
+    int recNonce;
+    sscanf(HP_buf,"%s%d",msg,recNonce);
+    if(recNonce == seq_nonce)
+        return 0;
+    
+    return 1;
+}
+
+int messaggeDeliver(char * msg,unsigned char * session_key1,unsigned char * session_key2,int sd,int seq_nonce){
+    int outlen;
+    int key_size=32;
+    int msg_len = strlen(msg);
+    char mcBuf[32];
+    char HP_buf[msg_len+11];
+    sprintf(HP_buf,"%s%d",msg,&seq_nonce);
+    HMAC(EVP_sha256(), session_key2, key_size, HP_buf,(strlen(HP_buf)), mcBuf, &outlen); 
+    //Encryption of Us, PswdHas, HMAC
+    unsigned char exHmac[64];
+    for (int i = 0; i < 32; ++i) {
+        sprintf(exHmac+ (i * 2),"%02X", mcBuf[i]);
+    }
+    char plaintext[64 + msg_len+2];
+    sprintf(plaintext,"%s %s",HP_buf,exHmac);
+    plaintext[65+msg_len]='\0';
+    unsigned char * ciphertext = (unsigned char*)malloc(sizeof(plaintext) + 16);
+    int cipherlen;
+    EVP_CIPHER_CTX* ctx;
+    ctx = EVP_CIPHER_CTX_new();
+    /* Encryption initialization + single update + finalization */
+    EVP_EncryptInit(ctx, EVP_aes_256_ecb(), session_key1, NULL);
+    EVP_EncryptUpdate(ctx, ciphertext, &outlen,(unsigned char*)plaintext, sizeof(plaintext));
+    cipherlen = outlen;
+    int ret=EVP_EncryptFinal(ctx, ciphertext + cipherlen, &outlen);
+    if(ret == 0){
+        printf("Encryption Error \n");
+        return -1;
+    }else{
+    printf("Correct Encryption\n");
+    }
+    cipherlen += outlen;
+    /* Context deallocation */
+    EVP_CIPHER_CTX_free(ctx);
+    ret=sendMsg(ciphertext,sd,cipherlen);
+   if(ret == -1){     
+        printf("Send encrypted messagge failed\n");
+    }else{
+        printf("Send encrypted messagge completed\n");
+    }
+    return ret;
 }
 
 //Generation of P and G for DH 
