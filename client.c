@@ -317,7 +317,8 @@ void menu_operation(){
     printf("\n[1] List");
     printf("\n[2] Get");
     printf("\n[3] Add");
-    printf("\n[4] Help\n");
+    printf("\n[4] Help");
+    printf("\n[5] Logout\n");
 }
 
 
@@ -427,18 +428,27 @@ int main(int argc, char** argv){
                 while (1){
                     int choice;
                     menu_operation();
-                    scanf("%d",choice);
+                    scanf("%d",&choice);
                     if(choice == 1){
                         
+
+                        messaggeDeliver("Ciao",session_key1,session_key2,sd,seq_nonce);
+                        seq_nonce++;
                     }else if(choice == 2){
                         
-
+                        messaggeDeliver("Ciao",session_key1,session_key2,sd,seq_nonce);
+                        seq_nonce++;
                     }else if(choice == 3){
                         
+                        messaggeDeliver("Ciao",session_key1,session_key2,sd,seq_nonce);
+                        seq_nonce++;
                     }else if(choice == 4){
                         help();
-                    }else{
-                        printf("Not valid input \n");
+                    }else if(choice == 5) {
+                        printf("Logout\n");
+                        messaggeDeliver("OUT",session_key1,session_key2,sd,seq_nonce);
+
+                        break;
                     }
                 }
                 
