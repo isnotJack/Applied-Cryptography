@@ -9,12 +9,22 @@ struct client {
     struct client * next;
 };
 
+struct post{
+    int mid;
+    char title[20];
+    char author[20];
+    char body[2000];
+    struct post *next; 
+};
+
 int main(int argc, char** argv){    
     int listener, new_sd,len;
     int srv_port;
     int ret;
     int addrlen; 
-    char buffer[KEY_LENGTH];
+    char buffer[16+64+MSG_LENGTH];
+    struct post * board= NULL;
+    int buffer_size;
     int fdmax; 
     int i;
     struct secret_Params * sessionParam= NULL;
@@ -92,7 +102,8 @@ int main(int argc, char** argv){
                     FD_SET(new_sd, &master);
                     if(new_sd > fdmax){ fdmax = new_sd; } 
                 }else{
-                    if(recvMsg(buffer,i)==-1){
+                    buffer_size=recvMsg(buffer,i);
+                    if(buffer_size==-1){
                         close(i);
                         FD_CLR(i, &master);
                         continue;
@@ -513,7 +524,53 @@ int main(int argc, char** argv){
                         sendMsg("LOGINOK",i,8);
                         temp_session->is_logged=true;
                         strcpy(buffer,"");
-                    }                
+                        free(plaintext);
+                        free(ciphertext);
+                    }
+                    else{
+                        //Check if logged
+                        struct secret_Params * temp_session = sessionParam;
+                        bool ret=false;
+                        while(temp_session!=NULL){
+                            if(temp_session->sd==i){
+                                if(temp_session->is_logged)
+                                    ret=true;
+                                    break;
+                            }
+                            temp_session=temp_session->next;
+                        }
+                        if(!ret){
+                            continue;
+                        }
+                        char msg[MSG_LENGTH];
+                        int req_nonce=atoi(temp_session->nonce);
+                        printf("Prima di messagge receipts\n");
+                        int res=messaggeReceipts(msg,buffer,buffer_size,temp_session->session_key1,temp_session->session_key2,req_nonce);
+                        if(res==0){
+                            req_nonce++;
+                            sprintf(temp_session->nonce,"%d",req_nonce);
+                        }else{
+                            continue;
+                        }
+                        //msg=CMD OPERANDS
+                        if(strncmp(msg,"LST",3)==0){
+
+
+                        }else if(strncmp(msg,"ADD",3)==0){
+
+
+                        }else if(strncmp(msg,"GET",3)==0){
+
+
+                        }else if(strncmp(msg,"OUT",3)==0){
+                            temp_session->is_logged=false;
+                        }else{
+                            //errore
+                        }
+
+                        strcpy(buffer,"");
+                    }
+
                 }
             }
         }
