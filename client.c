@@ -442,15 +442,35 @@ int main(int argc, char** argv){
                         messageDeliver("Ciao",session_key1,session_key2,sd,seq_nonce);
                         seq_nonce++;
                     }else if(choice == 3){
-                        
-                        messageDeliver("Ciao",session_key1,session_key2,sd,seq_nonce);
-                        seq_nonce++;
+                        char title[20];
+                        char body[500];
+                        char add_buffer[547];
+                        printf("Adding a new message to the BBS...\n");
+                        printf("Title:\n");
+                        while(getchar() !='\n');
+                        fgets(title, sizeof(title), stdin);
+                        int len = strlen(title);
+                        if (len > 0 && title[len - 1] == '\n') {
+                            title[len - 1] = '\0';
+                        }
+                        // author is in "username"
+                        printf("Body of the message:\n");
+                        fgets(body, sizeof(body), stdin);
+                        len = strlen(body);
+                        if (len > 0 && body[len - 1] == '\n') {
+                            body[len - 1] = '\0';
+                        }
+                        sprintf(add_buffer, "ADD %s_%s_%s", title, username, body);
+                        if (messageDeliver(add_buffer,session_key1,session_key2,sd,seq_nonce) != -1){
+                            seq_nonce++;
+                        }else{
+                            continue;
+                        }
                     }else if(choice == 4){
                         help();
                     }else if(choice == 5) {
                         printf("Logout\n");
                         messageDeliver("OUT",session_key1,session_key2,sd,seq_nonce);
-
                         break;
                     }
                 }

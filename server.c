@@ -24,6 +24,7 @@ int main(int argc, char** argv){
     int addrlen; 
     char buffer[16+64+MSG_LENGTH];
     struct post * board= NULL;
+    int message_id = 0;
     int buffer_size;
     int fdmax; 
     int i;
@@ -553,6 +554,7 @@ int main(int argc, char** argv){
                             continue;
                         }
                         //msg=CMD OPERANDS
+                        printf("Msg: %s\n", msg);
                         if(strncmp(msg,"LST",3)==0){
                             // int n;
                             // char number[6];
@@ -575,8 +577,55 @@ int main(int argc, char** argv){
                             // }
 
                         }else if(strncmp(msg,"ADD",3)==0){
-
-
+                            printf("Adding a new message to the BBS...\n");
+                            char title[20];
+                            char author[20];
+                            char body[500];
+                            char cmd[4];
+                            sscanf(msg, "%s", cmd);
+                            int i = 4;
+                            int j = 0;
+                            do{
+                                title[j++] = msg[i++]; 
+                            }while(msg[i]!='_');
+                            title[j]='\0';
+                            j = 0;
+                            i++;
+                            do{
+                                author[j++] = msg[i++]; 
+                            }while(msg[i]!='_');
+                            author[j] = '\0';
+                            j = 0;
+                            i++;
+                            for(i; i < strlen(msg); i++){
+                                body[j++] = msg[i]; 
+                            }
+                            body[j] = '\0';
+                            // inserisco il messaggio in bacheca
+                            struct post * temp_post;    // DA METTERE FUORI
+                            temp_post=malloc(sizeof( struct post));
+                            temp_post->mid = message_id++;
+                            strcpy(temp_post->title,title);
+                            strcpy(temp_post->author,author);
+                            strcpy(temp_post->body,body);
+                            if(board==NULL){
+                                temp_post->next=NULL;
+                                board =temp_post;
+                            }else {
+                                temp_post->next=board;
+                                board=temp_post;
+                            }
+                            printf("New message added correctly!\nHere all the messages in the BBS:\n");
+                            printf("--------------------------------\n");
+                            temp_post = board;
+                            while(temp_post!=NULL){
+                                printf("Mid: %d\n",temp_post->mid);
+                                printf("Title: %s\n",temp_post->title);
+                                printf("Author: %s\n",temp_post->author);
+                                printf("Body: %s\n",temp_post->body);
+                                printf("--------------------------------\n");
+                                temp_post = temp_post->next;
+                            }
                         }else if(strncmp(msg,"GET",3)==0){
 
 
