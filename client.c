@@ -429,24 +429,27 @@ int main(int argc, char** argv){
                     int choice;
                     menu_operation();
                     scanf("%d",&choice);
+                    int n;
                     if(choice == 1){
-                        
-
-                        messaggeDeliver("Ciao",session_key1,session_key2,sd,seq_nonce);
+                        char list_buffer[10];
+                        printf("Insert the number of latest messages to see:\n");
+                        scanf("%d",&n);
+                        sprintf(list_buffer,"LST %d",n);
+                        messageDeliver(list_buffer,session_key1,session_key2,sd,seq_nonce);
                         seq_nonce++;
                     }else if(choice == 2){
                         
-                        messaggeDeliver("Ciao",session_key1,session_key2,sd,seq_nonce);
+                        messageDeliver("Ciao",session_key1,session_key2,sd,seq_nonce);
                         seq_nonce++;
                     }else if(choice == 3){
                         
-                        messaggeDeliver("Ciao",session_key1,session_key2,sd,seq_nonce);
+                        messageDeliver("Ciao",session_key1,session_key2,sd,seq_nonce);
                         seq_nonce++;
                     }else if(choice == 4){
                         help();
                     }else if(choice == 5) {
                         printf("Logout\n");
-                        messaggeDeliver("OUT",session_key1,session_key2,sd,seq_nonce);
+                        messageDeliver("OUT",session_key1,session_key2,sd,seq_nonce);
 
                         break;
                     }

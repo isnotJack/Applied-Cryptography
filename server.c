@@ -13,7 +13,7 @@ struct post{
     int mid;
     char title[20];
     char author[20];
-    char body[2000];
+    char body[500];
     struct post *next; 
 };
 
@@ -544,8 +544,8 @@ int main(int argc, char** argv){
                         }
                         char msg[MSG_LENGTH];
                         int req_nonce=atoi(temp_session->nonce);
-                        printf("Prima di messagge receipts\n");
-                        int res=messaggeReceipts(msg,buffer,buffer_size,temp_session->session_key1,temp_session->session_key2,req_nonce);
+                        printf("Prima di message receipts\n");
+                        int res=messageReceipts(msg,buffer,buffer_size,temp_session->session_key1,temp_session->session_key2,req_nonce);
                         if(res==0){
                             req_nonce++;
                             sprintf(temp_session->nonce,"%d",req_nonce);
@@ -554,7 +554,25 @@ int main(int argc, char** argv){
                         }
                         //msg=CMD OPERANDS
                         if(strncmp(msg,"LST",3)==0){
+                            // int n;
+                            // char number[6];
+                            // printf("Ricevuto %s\n",msg);
+                            // printf("strlen msg =%ld\n",strlen(msg));
+                            // for(int i=3;i<strlen(msg);i++){
+                            //     number[i-3]= msg[i];
+                            // }
+                            // number[strlen(msg)-3]='\0';
+                            // sscanf(number,"%d",&n);
+                            // printf("number=  %s\nn= %d\n",number,n);
+                            // struct post * temp=board;
+                            // char messages_list[n*MSG_LENGTH];
+                            // for(int i=0;i<n;i++){
+                            //     if(temp==NULL)
+                            //         break;
+                            //     sprintf(messages_list,"%s 
+                            //     ")
 
+                            // }
 
                         }else if(strncmp(msg,"ADD",3)==0){
 
