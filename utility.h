@@ -64,8 +64,7 @@ long recvMsg(char * buffer,int sd){
     return len;
 }
 
-int messaggeReceipts(char * msg,unsigned char * ciphertext,int cipherlen,unsigned char * session_key1,unsigned char * session_key2,int seq_nonce){
-    
+int messageReceipts(char * msg,unsigned char * ciphertext,int cipherlen,unsigned char * session_key1,unsigned char * session_key2,int seq_nonce){
     unsigned char plaintext[64+MSG_LENGTH+11+2];
     int outlen;
     int plainlen;
@@ -86,11 +85,16 @@ int messaggeReceipts(char * msg,unsigned char * ciphertext,int cipherlen,unsigne
     int recNonce;
     char HP_buf[MSG_LENGTH+12];
     unsigned char recHmac[65];
-    sscanf(plaintext,"%s %d %s",msg,&recNonce,recHmac);
-    printf("Rec Mac prima %s\n",recHmac);
+    unsigned char exmsg[MSG_LENGTH];
+    sscanf(plaintext,"%s %d %s",exmsg,&recNonce,recHmac);
+    int buffer_len= strlen(exmsg)/2;
+    for (int i = 0; i < buffer_len; ++i) {
+        sscanf(exmsg + (i * 2), "%2hhx", &msg[i]);
+    }
+    msg[buffer_len]='\0';
+    printf("Messaggio convertito %s\n",msg);
     recHmac[64]='\0';
-    printf("Rec Mac dopo %s\n",recHmac);
-    sprintf(HP_buf,"%s %d",msg,recNonce);
+    sprintf(HP_buf,"%s %d",exmsg,recNonce);
     int HP_buf_len=strlen(HP_buf);
     printf("Hp buf len %d\n",HP_buf_len);
     HP_buf[HP_buf_len]='\0';
@@ -119,16 +123,20 @@ int messaggeReceipts(char * msg,unsigned char * ciphertext,int cipherlen,unsigne
     return 1;
 }
 
-int messaggeDeliver(char * msg,unsigned char * session_key1,unsigned char * session_key2,int sd,int seq_nonce){
+int messageDeliver(char * msg,unsigned char * session_key1,unsigned char * session_key2,int sd,int seq_nonce){
     int outlen;
     int key_size=32;
     int msg_len = strlen(msg);
     char mcBuf[32];
-    char HP_buf[msg_len+11];
-    sprintf(HP_buf,"%s %d",msg,seq_nonce);
+    char exmsg[msg_len*2+1];
+    for (int i = 0; i < msg_len; ++i) {
+        sprintf(exmsg+ (i * 2),"%02X", msg[i]);
+    }
+    exmsg[msg_len*2]='\0';
+    char HP_buf[msg_len*2+12];
+    sprintf(HP_buf,"%s %d",exmsg,seq_nonce);
     printf("strlen(HP_buf): %ld\n",strlen(HP_buf));
     HMAC(EVP_sha256(), session_key2, key_size, HP_buf,(strlen(HP_buf)), mcBuf, &outlen); 
-    //Encryption of Us, PswdHas, HMAC
     unsigned char exHmac[65];
     for (int i = 0; i < 32; ++i) {
         sprintf(exHmac+ (i * 2),"%02X", mcBuf[i]);
@@ -137,7 +145,6 @@ int messaggeDeliver(char * msg,unsigned char * session_key1,unsigned char * sess
     printf("exHmac %s\n",exHmac);
     char plaintext[64 + strlen(HP_buf)+2];
     sprintf(plaintext,"%s %s",HP_buf,exHmac);
-    //plaintext[65+strlen(HP_buf)]='\0';
     printf("Delivered plaintext %s\n",plaintext);
     unsigned char * ciphertext = (unsigned char*)malloc(sizeof(plaintext) + 16);
     int cipherlen;
