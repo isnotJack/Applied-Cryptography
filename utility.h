@@ -15,11 +15,6 @@
 #include <stdio.h>
 #include <openssl/hmac.h>
 
-
-
-
-
-
 int MAX_LENGTH = 50;
 int KEY_LENGTH = 1024;
 int PUB_CMD_LENGTH = 129;
@@ -116,8 +111,7 @@ int messageReceipts(char * msg,unsigned char * ciphertext,int cipherlen,unsigned
         return -1;
     }
     printf("Dopo verification\n");
-    
-    sscanf(HP_buf,"%s %d",msg,&recNonce);
+    printf("Seq nonce: %d\n", seq_nonce);
     if(recNonce == seq_nonce)
         return 0;
     return 1;
@@ -361,7 +355,7 @@ EVP_PKEY * retrieve_pubkey(char * username, int sd){
             }
             else
                 before->next=del->next;
-            free(del);
+            //free(del);
             return true;
         }
         before=del;
@@ -401,7 +395,7 @@ void insertFile(char *buffer,int size, int i){
 bool checkInput(char * input){
     regex_t regex;     
     int expr = regcomp(&regex, "^([A-Za-z@.0-9]+)$", REG_EXTENDED);
-        // Controlla se l'input soddisfa l'espressione regolare    
+    // Controlla se l'input soddisfa l'espressione regolare    
     expr = regexec(&regex, input, 0, NULL, 0);    
 
     regfree(&regex);     
