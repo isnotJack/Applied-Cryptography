@@ -300,6 +300,7 @@ int main(int argc, char** argv){
 
                         //Decifro le credenziali
                         unsigned char * session_key1 = (unsigned char*)malloc(EVP_MD_size(EVP_sha256())); 
+                        
                         //recupero session key
                         struct secret_Params * temp=sessionParam;
                         while(temp != NULL){
@@ -315,7 +316,8 @@ int main(int argc, char** argv){
                             FD_CLR(i, &master);
                             continue;
                         }
-                        unsigned char * plaintext=malloc(MAX_LENGTH + US_LENGTH +67);
+                        unsigned char * plaintext=malloc(MAX_LENGTH + US_LENGTH +67+7);
+                        memset(plaintext, 0,MAX_LENGTH + US_LENGTH +67+7);
                         int outlen;
                         int plainlen;
                         EVP_CIPHER_CTX* ctx;
@@ -378,6 +380,7 @@ int main(int argc, char** argv){
                             fwrite(&challenge,sizeof(int),1,file);
                             fclose(file);
                             char chall_recv[11];
+                            memset(chall_recv, 0, sizeof(chall_recv));
                             int chall_resp;
                             if(recvMsg(chall_recv,i)==-1){
                                 close(i);
@@ -447,7 +450,8 @@ int main(int argc, char** argv){
                             strcpy(buffer,"");
                             continue;
                         }
-                        unsigned char * plaintext=malloc(US_LENGTH +64*2+2);
+                        unsigned char * plaintext=malloc(US_LENGTH +64*2+2+10);
+                        memset(plaintext, 0, US_LENGTH +64*2+10); 
                         int outlen;
                         int plainlen;
                         EVP_CIPHER_CTX* ctx;
