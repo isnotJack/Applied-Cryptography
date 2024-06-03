@@ -437,6 +437,36 @@ int main(int argc, char** argv){
                         sprintf(list_buffer,"LST %d",n);
                         messageDeliver(list_buffer,session_key1,session_key2,sd,seq_nonce);
                         seq_nonce++;
+                        char cipher[MSG_LENGTH];
+                        char message[MSG_LENGTH/2];
+                        printf("Showing latest %d messages:\n",n);
+                        char *title;
+                        char *author;
+                        char *body;
+                        char * mid;
+                        while (1)
+                        {
+                            int cipherlen=recvMsg(cipher,sd);
+                            if(cipherlen==-1){
+                                printf("Error in list receiving\n");
+                                break;
+                            }
+                            ret=messageReceipts(message,cipher,cipherlen,session_key1,session_key2,seq_nonce);
+                            if(ret!=0)
+                                break;
+                            seq_nonce++;
+                            if(strncmp(message,"END",3)==0)
+                                break;
+                            mid = strtok(message, "_");
+                            author = strtok(NULL, "_");
+                            title = strtok(NULL, "_");
+                            body = strtok(NULL, "_");
+                            
+                            
+                            printf("Mid: %s\nAuthor: %s\nTitle: %s\nBody: %s\n",mid,author,title,body);
+                            printf("/---------------------------------------------------------------/\n");
+                        }
+
                     }else if(choice == 2){
                         int k;
                         char choice_buffer[10];
