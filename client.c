@@ -438,9 +438,61 @@ int main(int argc, char** argv){
                         messageDeliver(list_buffer,session_key1,session_key2,sd,seq_nonce);
                         seq_nonce++;
                     }else if(choice == 2){
+                        int k;
+                        char choice_buffer[10];
+                        char path[100];
+                        char buffer[550];
+                        char msg[550];
+                        int buffer_size;
+
+                        char *part1;
+                        char *part2;
+                        char *part3;
+                        char *part4;
+
+
+                        printf("Insert the message identifier of the message to download it:\n");
+                        scanf("%d",&k);
+                        sprintf(choice_buffer,"GET %d",k);
+                        printf("Downloading a specified message from the BBS...\n");
+                        printf("choice_buffer %s \n", choice_buffer);
+
+                        messageDeliver(choice_buffer,session_key1,session_key2,sd,seq_nonce);
+                            seq_nonce++;
+
+
+                        buffer_size=recvMsg(buffer,sd);
+                        int res=messageReceipts(msg,buffer,buffer_size,session_key1,session_key2,seq_nonce);
+                            seq_nonce++;
+
+
+                        printf("Msg: %s\n", msg);
+         
+                        part1 = strtok(msg, "_");
+                        part2 = strtok(NULL, "_");
+                        part3 = strtok(NULL, "_");
+                        part4 = strtok(NULL, "_");
+
+                        if (part1 != NULL) printf("Part 1: %s\n", part1);
+                        if (part2 != NULL) printf("Part 2: %s\n", part2);
+                        if (part3 != NULL) printf("Part 3: %s\n", part3);
+                        if (part4 != NULL) printf("Part 4: %s\n", part4);
+
+                        sprintf(path, "./Download/message_%s.txt",part1);
                         
-                        messageDeliver("Ciao",session_key1,session_key2,sd,seq_nonce);
-                        seq_nonce++;
+                        FILE* file = fopen(path, "w");
+                        if(!file) { 
+                            printf("Error opening the file\n");
+                            exit(1);
+                        }
+                        fprintf(file, "Title: %s\n", part2);
+                        fprintf(file, "Author: %s\n", part3);
+                        fprintf(file, "Body:%s\n", part4);
+                        
+                        fclose(file);
+
+                        printf("You can find the message in the Download folder on your pc\n");
+                        
                     }else if(choice == 3){
                         char title[20];
                         char body[500];
