@@ -196,7 +196,7 @@ void registration(char email[],char username[],char password[],int sd){
     printf("Registration start...\n");
     // mandare credenziali cifrate e con firma
     unsigned char * pswdHash;
-    pswdHash = (unsigned char*)malloc(EVP_MD_size(EVP_sha256()));
+    pswdHash = (unsigned char*)malloc(33);
     int pswdHashLen=Hash(pswdHash,password,strlen(password));
     pswdHash[32]='\0';
     unsigned char * hash_buf=(unsigned char*)malloc(65);
@@ -209,6 +209,7 @@ void registration(char email[],char username[],char password[],int sd){
     
     EVP_PKEY * priv_key=retrieve_privkey(username);
     unsigned char * ciphertext = (unsigned char*)malloc(sizeof(sendBuffer) + 16); //--> Credenziali cifrate
+    memset(ciphertext,0,(sizeof(sendBuffer) + 16));
     int cipherlen;
     int outlen;
     //Cifro send buffer con k1
@@ -219,7 +220,7 @@ void registration(char email[],char username[],char password[],int sd){
     EVP_EncryptFinal(ctx, ciphertext + cipherlen, &outlen);
     cipherlen += outlen;
     EVP_CIPHER_CTX_free(ctx);
-
+    
     //firmo send buffer cifrato
     unsigned char * signature=malloc(EVP_PKEY_size(priv_key));
     int signature_length=Digital_Signature_Msg(priv_key,ciphertext,signature);
@@ -250,6 +251,7 @@ void registration(char email[],char username[],char password[],int sd){
     printf("Signature on ciphertext sent correctly\n");
 
     char temp_buffer[20];
+    memset(temp_buffer,0,20);
     if(recvMsg(temp_buffer,sd)==-1){
         close(sd);
         exit(1);
@@ -370,7 +372,7 @@ int main(int argc, char** argv){
         }else if(var == 2){
             login(username,password);
             handshake(username, sd,session_key1,key1_len,nonce_buf);
-            unsigned char * pswd_Hash= (unsigned char*)malloc(EVP_MD_size(EVP_sha256()));
+            unsigned char * pswd_Hash= (unsigned char*)malloc(33);
             int pswd_size=Hash(pswd_Hash,password,strlen(password));
             unsigned char * hash_buf=(unsigned char*)malloc(65);
             pswd_Hash[32]='\0';
@@ -395,6 +397,7 @@ int main(int argc, char** argv){
             sprintf(plaintext,"%s %s%s",username,hash_buf,exHmac);
             plaintext[strlen(username)+1+128]='\0';
             unsigned char * ciphertext = (unsigned char*)malloc(sizeof(plaintext) + 16);
+            memset(ciphertext,0,sizeof(plaintext) + 16);
             int cipherlen;
             EVP_CIPHER_CTX* ctx;
             ctx = EVP_CIPHER_CTX_new();
