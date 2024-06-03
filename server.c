@@ -627,6 +627,40 @@ int main(int argc, char** argv){
                                 temp_post = temp_post->next;
                             }
                         }else if(strncmp(msg,"GET",3)==0){
+                            printf("sono entrato %s\n", msg);
+                            char cmd[4];
+                            int mid;
+                            int returns;
+                            char get_buffer[550];
+                            sscanf(msg, "%s %d", cmd,&mid);
+
+                            struct post * temp_post=board;
+                            while(temp_post!=NULL){
+                                if(temp_post->mid == mid){
+                                    printf("Found MSG\n");
+                                    printf("title %s, author %s , body %s\n",temp_post->title, temp_post->author, temp_post->body);
+                                    printf("title_len %d, author %d , body %d\n",strlen(temp_post->title), strlen(temp_post->author), strlen(temp_post->body));
+
+                                    sprintf(get_buffer, "%d_%s_%s_%s",temp_post->mid, temp_post->title, temp_post->author, temp_post->body);
+                                    get_buffer[sizeof(mid)+543] = '\0';
+                                    printf("get buffer %s \n", get_buffer);
+                                    returns = messageDeliver(get_buffer,temp_session->session_key1,temp_session->session_key2,i,req_nonce);
+
+                                        printf("sono entrato \n");
+                                        req_nonce++;
+                                        sprintf(temp_session->nonce,"%d",req_nonce);
+
+                                    if (returns == -1){
+                                        close(i);
+                                        FD_CLR(i, &master);
+                                        continue;
+                                    }
+                                    break;
+                                    
+                                }
+                                temp_post=temp_post->next;
+                            }
+
 
 
                         }else if(strncmp(msg,"OUT",3)==0){
