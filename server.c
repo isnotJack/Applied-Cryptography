@@ -556,25 +556,34 @@ int main(int argc, char** argv){
                         //msg=CMD OPERANDS
                         printf("Msg: %s\n", msg);
                         if(strncmp(msg,"LST",3)==0){
-                            // int n;
-                            // char number[6];
-                            // printf("Ricevuto %s\n",msg);
-                            // printf("strlen msg =%ld\n",strlen(msg));
-                            // for(int i=3;i<strlen(msg);i++){
-                            //     number[i-3]= msg[i];
-                            // }
-                            // number[strlen(msg)-3]='\0';
-                            // sscanf(number,"%d",&n);
-                            // printf("number=  %s\nn= %d\n",number,n);
-                            // struct post * temp=board;
-                            // char messages_list[n*MSG_LENGTH];
-                            // for(int i=0;i<n;i++){
-                            //     if(temp==NULL)
-                            //         break;
-                            //     sprintf(messages_list,"%s 
-                            //     ")
+                            int n;
+                            char cmd[4];
+                            sscanf(msg,"%s %d",cmd,&n);
+                            cmd[3]='\0';
+                            struct post * temp=board;
+                            int max_msg=0;
+                            while(temp!=NULL){
+                                max_msg++;
+                                temp=temp->next;
+                            }
+                            if(n>max_msg)
+                                n=max_msg;
+                            char message[MSG_LENGTH];
+                            temp=board;
 
-                            // }
+                            for(int j=0;j<n;j++){
+                                if(temp==NULL)
+                                    break;
+                                sprintf(message,"%d_%s_%s_%s",temp->mid,temp->author,temp->title,temp->body);
+                                messageDeliver(message,temp_session->session_key1,temp_session->session_key2,i,req_nonce);
+                                req_nonce++;
+                                sprintf(temp_session->nonce,"%d",req_nonce);
+                                strcpy(message,"");
+                                temp=temp->next;
+                            }
+                            messageDeliver("END",temp_session->session_key1,temp_session->session_key2,i,req_nonce);
+                            req_nonce++;
+                            sprintf(temp_session->nonce,"%d",req_nonce);
 
                         }else if(strncmp(msg,"ADD",3)==0){
                             printf("Adding a new message to the BBS...\n");
@@ -639,7 +648,7 @@ int main(int argc, char** argv){
                                 if(temp_post->mid == mid){
                                     printf("Found MSG\n");
                                     printf("title %s, author %s , body %s\n",temp_post->title, temp_post->author, temp_post->body);
-                                    printf("title_len %d, author %d , body %d\n",strlen(temp_post->title), strlen(temp_post->author), strlen(temp_post->body));
+                                    printf("title_len %ld, author %ld , body %ld\n",strlen(temp_post->title), strlen(temp_post->author), strlen(temp_post->body));
 
                                     sprintf(get_buffer, "%d_%s_%s_%s",temp_post->mid, temp_post->title, temp_post->author, temp_post->body);
                                     get_buffer[sizeof(mid)+543] = '\0';
@@ -666,7 +675,7 @@ int main(int argc, char** argv){
                         }else if(strncmp(msg,"OUT",3)==0){
                             temp_session->is_logged=false;
                         }else{
-                            //errore
+                            //errore O CLOSE(I)
                         }
 
                         strcpy(buffer,"");
