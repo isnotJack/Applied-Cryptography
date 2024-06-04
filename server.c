@@ -106,6 +106,7 @@ int main(int argc, char** argv){
                     if(buffer_size==-1){
                         close(i);
                         FD_CLR(i, &master);
+                        strcpy(buffer,"");
                         continue;
                     }
                 
