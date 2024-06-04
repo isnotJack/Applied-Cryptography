@@ -32,8 +32,6 @@ struct secret_Params
     struct secret_Params * next;
 };
 
-
-// Utility Functions to send and receive the lenght before the message
 bool sendMsg(char * msg, int sd,long len){
     int ret;
     long lmsg;
@@ -59,6 +57,9 @@ long recvMsg(char * buffer,int sd){
     return len;
 }
 
+// 1) Decrypts the ciphertext
+// 2) Compute HMAC(Msg|Nonce)
+// 3) Verify the received HMAC with the one computed locally
 int messageReceipts(char * msg,unsigned char * ciphertext,int cipherlen,unsigned char * session_key1,unsigned char * session_key2,int seq_nonce){
     unsigned char plaintext[64+MSG_LENGTH+11+2];
     int outlen;
@@ -70,12 +71,13 @@ int messageReceipts(char * msg,unsigned char * ciphertext,int cipherlen,unsigned
     plainlen = outlen;
     int ret = EVP_DecryptFinal(ctx, plaintext + plainlen, &outlen);
     plainlen += outlen;
-    printf("Plaintext %s\n",plaintext);
+    // printf("Plaintext %s\n",plaintext);
     if(ret == 0){
-        printf("Decryption Error \n");
-    }else{
-        printf("Correct Decryption: Msg, Nonce, HMAC\n");
+        printf(" - Decryption Error \n");
+        return 1;
     }
+    printf(" - Correct Decryption: Message|Nonce|HMAC\n");
+    
     EVP_CIPHER_CTX_free(ctx);
     int recNonce;
     char HP_buf[MSG_LENGTH+12];
@@ -87,11 +89,11 @@ int messageReceipts(char * msg,unsigned char * ciphertext,int cipherlen,unsigned
         sscanf(exmsg + (i * 2), "%2hhx", &msg[i]);
     }
     msg[buffer_len]='\0';
-    printf("Messaggio convertito %s\n",msg);
+    //printf("Messaggio convertito %s\n",msg);
     recHmac[64]='\0';
     sprintf(HP_buf,"%s %d",exmsg,recNonce);
     int HP_buf_len=strlen(HP_buf);
-    printf("Hp buf len %d\n",HP_buf_len);
+    // printf("Hp buf len %d\n",HP_buf_len);
     HP_buf[HP_buf_len]='\0';
     char mcBuf[33];
     int mac_len;
@@ -103,20 +105,28 @@ int messageReceipts(char * msg,unsigned char * ciphertext,int cipherlen,unsigned
         sprintf(exHmac+ (i * 2),"%02X", mcBuf[i]);
     }
     exHmac[64]='\0';
-    printf("Mac generated %s\nMac received %s\n",exHmac,recHmac);
-    printf("nonce %d\n",recNonce);
+    //printf("Mac generated %s\nMac received %s\n",exHmac,recHmac);
+    // printf("nonce %d\n",recNonce);
     if(CRYPTO_memcmp(recHmac, exHmac,64) != 0){
         //GESTIONE ERRORE
-        printf("Errore nella mac verification\n");
-        return -1;
+        printf(" - MAC verification error\n");
+        return 1;
     }
-    printf("Dopo verification\n");
-    printf("Seq nonce: %d\n", seq_nonce);
-    if(recNonce == seq_nonce)
+    printf(" - MAC verification success!\n");
+    // printf("Dopo verification\n");
+    // printf("Seq nonce: %d\n", seq_nonce);
+    if(recNonce == seq_nonce){
+        printf(" - Correct sequence number\n");
         return 0;
+    }
+    printf(" - Sequence number not correct.\n");
     return 1;
 }
 
+// Implement the scheme MAC then Encrypt:
+//     1) Compute the HMAC of Msg|Nonce
+//     2) Compute the encryption of Msg|Nonce|HMAC
+//     3) Send ciphertext through the socket sd
 int messageDeliver(char * msg,unsigned char * session_key1,unsigned char * session_key2,int sd,int seq_nonce){
     int outlen;
     int key_size=32;
@@ -129,17 +139,19 @@ int messageDeliver(char * msg,unsigned char * session_key1,unsigned char * sessi
     exmsg[msg_len*2]='\0';
     char HP_buf[msg_len*2+12];
     sprintf(HP_buf,"%s %d",exmsg,seq_nonce);
-    printf("strlen(HP_buf): %ld\n",strlen(HP_buf));
+    // printf("strlen(HP_buf): %ld\n",strlen(HP_buf));
     HMAC(EVP_sha256(), session_key2, key_size, HP_buf,(strlen(HP_buf)), mcBuf, &outlen); 
     unsigned char exHmac[65];
     for (int i = 0; i < 32; ++i) {
         sprintf(exHmac+ (i * 2),"%02X", mcBuf[i]);
     }
     exHmac[64]='\0';
-    printf("exHmac %s\n",exHmac);
+    printf(" - HMAC of (Msg|Nonce) computed.\n");
+
+    // printf("exHmac %s\n",exHmac);
     char plaintext[64 + strlen(HP_buf)+2];
     sprintf(plaintext,"%s %s",HP_buf,exHmac);
-    printf("Delivered plaintext %s\n",plaintext);
+    // printf("Delivered plaintext %s\n",plaintext);
     unsigned char * ciphertext = (unsigned char*)malloc(sizeof(plaintext) + 16);
     int cipherlen;
     EVP_CIPHER_CTX* ctx;
@@ -150,20 +162,19 @@ int messageDeliver(char * msg,unsigned char * session_key1,unsigned char * sessi
     cipherlen = outlen;
     int ret=EVP_EncryptFinal(ctx, ciphertext + cipherlen, &outlen);
     if(ret == 0){
-        printf("Encryption Error \n");
+        printf(" - Encryption Error \n");
         return -1;
-    }else{
-    printf("Correct Encryption\n");
     }
+    printf(" - Correct Encryption of Msg|Nonce|HMAC\n");
+    
     cipherlen += outlen;
     /* Context deallocation */
     EVP_CIPHER_CTX_free(ctx);
     ret=sendMsg(ciphertext,sd,cipherlen);
-   if(ret == -1){     
-        printf("Send encrypted messagge failed\n");
-    }else{
-        printf("Send encrypted messagge completed\n");
-    }
+    if(ret == -1)    
+        printf(" - Ciphertext sending failed.\n");
+    else
+        printf(" - Ciphertext sent correctly.\n");
     return ret;
 }
 
@@ -177,9 +188,7 @@ void DH_parameter_generation(){
     sprintf(command,"openssl dhparam -out dh_param.pem -2 -C 2048");
     system(command);
     }   
-
 }
-
 
 void DH_PubPriv(EVP_PKEY* dh_params, EVP_PKEY ** my_prvkey, EVP_PKEY_CTX * DH_ctx){
     EVP_PKEY_keygen_init(DH_ctx);
@@ -198,7 +207,6 @@ int Hash(unsigned char * digest, unsigned char *msg ,int msg_len){
     EVP_MD_CTX_free(ctx);
     return digestlen;
 }
-
 
  int Verify_Signature(EVP_PKEY * DH_keys,EVP_PKEY * pubkey, unsigned char * signature, int signature_length){
      EVP_MD_CTX* VER_ctx = EVP_MD_CTX_new();
@@ -225,7 +233,6 @@ int Hash(unsigned char * digest, unsigned char *msg ,int msg_len){
     return ret;
  }
 
-// Firma digitale su una chiave
 int Digital_Signature(EVP_PKEY * priv_key, EVP_PKEY * DH_keys, unsigned char * signature){
 
     int signature_len;
@@ -250,7 +257,7 @@ int Digital_Signature(EVP_PKEY * priv_key, EVP_PKEY * DH_keys, unsigned char * s
 
     EVP_SignUpdate(ctx, (unsigned char*)buffer,buffer_length);
     EVP_SignFinal(ctx, signature, &signature_len,priv_key);
-    printf("Signature on DH public parameter done \n");
+    printf(" - Signature on DH public parameter done \n");
     EVP_MD_CTX_free(ctx);
     BIO_free(bio); // Liberare la memoria del BIO
     return signature_len;
@@ -264,7 +271,7 @@ int Digital_Signature_Msg(EVP_PKEY * priv_key, unsigned char * msg, unsigned cha
     // Ottieni il puntatore al buffer di dati BIO
     EVP_SignUpdate(ctx, (unsigned char*)msg,sizeof(msg));
     EVP_SignFinal(ctx, signature, &signature_len,priv_key);
-    printf("Signature on Enc(username, email, H(password)) done \n");
+    printf(" - Signature on Enc(username, email, H(password)) done \n");
     EVP_MD_CTX_free(ctx);
     return signature_len;
 }
@@ -345,7 +352,7 @@ EVP_PKEY * retrieve_pubkey(char * username, int sd){
     return pubkey;
 }
 
- bool removeSessionParam(int i,struct secret_Params ** sessionParam){
+bool removeSessionParam(int i,struct secret_Params ** sessionParam){
     struct secret_Params * del=*sessionParam;
     struct secret_Params * before=NULL;
     while(del!=NULL){
@@ -355,15 +362,14 @@ EVP_PKEY * retrieve_pubkey(char * username, int sd){
             }
             else
                 before->next=del->next;
-            //free(del);
+            free(del);
             return true;
         }
         before=del;
         del=del->next;
     }
     return false;
- }
-
+}
 
 void insertFile(char *buffer,int size, int i){
     char path[100];
@@ -433,12 +439,4 @@ bool send_public_key(int socket, EVP_PKEY *public_key) {
     BIO_free(bio); // Liberare la memoria del BIO
     return 1; // Invio della chiave pubblica completato con successo
 }
-
-
-// bool checkOverflow(char * input,int max_dim){
-//     int input_dim=strlen(input)+1;
-//     if (input_dim>max_dim)
-//         return true;
-//     return false;
-// }
 

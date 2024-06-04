@@ -1,4 +1,3 @@
-/*gestire la connessione come una funzione, date le richiesti di login e logout*/
 #include "utility.h"
 
 //GLOBAL FOR SCOPE
@@ -39,16 +38,16 @@ void handshake(char * username,int sd,unsigned char* session_key1,int key1_len,c
     printf("Handshake start...\n");
     ret = sendMsg("HANDSHAKE",sd,10);
     if (ret == -1){
-        printf("Send Handshake message error \n");
+        printf(" - Send Handshake message error \n");
         close(sd);
         exit(1);
     }
     if (!send_public_key(sd, pubkey)){            // invio al server della chiave pubblica RSA
-        printf("Error sending RSA public key\n");
+        printf(" - Error sending RSA public key\n");
         close(sd);
         exit(1);
     }
-    printf("RSA public key sent correctly\n");
+    printf(" - RSA public key sent correctly\n");
 
     //Chiave pubblica server letta da file del server "keys_server" (BARBINO)
     serverKey = retrieve_pubkey("server",-1);
@@ -57,7 +56,7 @@ void handshake(char * username,int sd,unsigned char* session_key1,int key1_len,c
     DH_ctx = EVP_PKEY_CTX_new(dh_params, NULL);
     DH_keys = NULL;
     DH_PubPriv(dh_params,&DH_keys,DH_ctx);
-    printf("Private/public pair for DH generated\n");
+    printf(" - Private/public pair for DH generated\n");
 
     priv_key = retrieve_privkey(username);   // chiave per poter firmare il parametro pubblico di DH
     unsigned char * signature;
@@ -65,19 +64,19 @@ void handshake(char * username,int sd,unsigned char* session_key1,int key1_len,c
     int signature_length=Digital_Signature(priv_key,DH_keys,signature);
 
     if (!send_public_key(sd,DH_keys)){
-        printf("Error sending g^a\n");
+        printf(" - Error sending g^a\n");
         close(sd);
         exit(1);
     }
-    printf("g^a sent correctly\n");
+    printf(" - g^a sent correctly\n");
 
     ret = sendMsg(signature,sd,signature_length);
     if (ret == -1){
-        printf("Send signature on g^a error \n");
+        printf(" - Send signature on g^a error \n");
         close(sd);
         exit(1);
     }
-    printf("Signature on g^a sent correctly\n");
+    printf(" - Signature on g^a sent correctly\n");
 
     /////////RICEVO DAL SERVER ///////
     EVP_PKEY * DH_server_keys;
@@ -87,19 +86,19 @@ void handshake(char * username,int sd,unsigned char* session_key1,int key1_len,c
     unsigned char * DH_pub_server = malloc(2*KEY_LENGTH);
     int size=recvMsg(DH_pub_server,sd);
     if(size==-1){
-        printf("Receive of g^b error \n");
+        printf(" - Receive of g^b error \n");
         close(sd);
         exit(1);
     }
-    printf("g^b received correctly\n");
+    printf(" - g^b received correctly\n");
 
     server_sign_len=recvMsg(server_signature,sd);
      if(server_sign_len==-1){
-        printf("Receive of signature on g^b error \n");
+        printf(" - Receive of signature on g^b error \n");
         close(sd);
         exit(1);
     }
-    printf("Signature on g^b received correctly\n");
+    printf(" - Signature on g^b received correctly\n");
 
 
     BIO *bio = BIO_new_mem_buf(DH_pub_server, size);
@@ -120,11 +119,11 @@ void handshake(char * username,int sd,unsigned char* session_key1,int key1_len,c
     BIO_free(bio);
     ret = Verify_Signature(DH_server_keys,serverKey,server_signature,server_sign_len);
     if(ret!=1){
-        printf("Signature Verification on g^b Error \n");
+        printf(" - Signature Verification on g^b Error \n");
         close(sd);
         exit(1);
     }
-    printf("Signature Verification on g^b Success \n");
+    printf(" - Signature Verification on g^b Success \n");
 
     //DH_server_keys contains g^b
     EVP_PKEY_CTX* ctx_drv = EVP_PKEY_CTX_new(DH_keys, NULL);
@@ -145,11 +144,11 @@ void handshake(char * username,int sd,unsigned char* session_key1,int key1_len,c
     // ricezione del nonce che verrà usato per generare l'altra chiave di sessione
     // utile solo quando l'handshake è seguito dal login
     if(recvMsg(nonce_buf,sd)==-1){
-        printf("Error receiving nonce\n");
+        printf(" - Error receiving nonce\n");
         close(sd);
         exit(1);
     }
-    printf("Nonce received correctly\n");
+    printf(" - Nonce received correctly\n");
 
     //Eliminazione a g^a g^b g^ab
     free(secret);
@@ -161,7 +160,6 @@ void handshake(char * username,int sd,unsigned char* session_key1,int key1_len,c
 
 void registration(char email[],char username[],char password[],int sd){
     int ret;
-
     //inserire credenziali
     printf("Insert the following parameters\n");
     do{
@@ -229,26 +227,26 @@ void registration(char email[],char username[],char password[],int sd){
 
     ret = sendMsg("REGISTRATION",sd,13);
     if (ret == -1){
-        printf("Send Registration error \n");
+        printf(" - Send Registration message error \n");
         close(sd);
         exit(1);
     }
 
     ret = sendMsg(ciphertext,sd,cipherlen);
     if (ret == -1){
-        printf("Send ciphertext error \n");
+        printf(" - Send ciphertext error \n");
         close(sd);
         exit(1);
     }
-    printf("Enc(username, email, H(password)) sent correctly\n");
+    printf(" - Enc(username, email, H(password)) sent correctly\n");
     
     ret = sendMsg(signature,sd,signature_length);
     if (ret == -1){
-        printf("Send ciphertext signature error \n");
+        printf(" - Send ciphertext signature error \n");
         close(sd);
         exit(1);
     }
-    printf("Signature on ciphertext sent correctly\n");
+    printf(" - Signature on ciphertext sent correctly\n");
 
     char temp_buffer[20];
     memset(temp_buffer,0,20);
@@ -257,7 +255,7 @@ void registration(char email[],char username[],char password[],int sd){
         exit(1);
     }
     if(strcmp(temp_buffer,"FAILED\0")==0){
-        printf("Registration failed: Credential Already Used\n");
+        printf(" - Registration failed: Credential Already Used\n");
     }else{
         char path [US_LENGTH+15];
         sprintf(path,"CHALLENGE_%s.txt",username);
@@ -269,11 +267,11 @@ void registration(char email[],char username[],char password[],int sd){
         sprintf(sendChall,"%d",challenge);
         ret = sendMsg(sendChall,sd,strlen(sendChall));
         if (ret == -1){
-            printf("Send challenge response error \n");
+            printf(" - Send challenge response error \n");
             close(sd);
             exit(1);
         }
-        printf("Challenge response sent correctly\n");
+        printf(" - Challenge response sent correctly\n");
         if(recvMsg(temp_buffer,sd)==-1){
             close(sd);
             exit(1);
@@ -281,7 +279,7 @@ void registration(char email[],char username[],char password[],int sd){
         if(strcmp(temp_buffer,"CHALOK\0")==0)
             printf("Registration Completed.\n");
         else{
-            printf("Registration failed : challenge not completed.\n");
+            printf("Registration failed: challenge not completed.\n");
         }
     }
 }
@@ -304,8 +302,6 @@ void login(char username[],char password[]){
         password[strcspn(password, "\n")] = '\0';
         fflush(stdin);
     }while(!checkInput(password));
-
-
 }
 
 void help(){
@@ -315,7 +311,7 @@ void help(){
 }
 
 void menu_operation(){
-    printf("Welcome, to interact insert the name of the functions");
+    printf("Welcome, to interact insert the number of the function:");
     printf("\n[1] List");
     printf("\n[2] Get");
     printf("\n[3] Add");
@@ -372,6 +368,7 @@ int main(int argc, char** argv){
         }else if(var == 2){
             login(username,password);
             handshake(username, sd,session_key1,key1_len,nonce_buf);
+            printf("Login start...\n");
             unsigned char * pswd_Hash= (unsigned char*)malloc(33);
             int pswd_size=Hash(pswd_Hash,password,strlen(password));
             unsigned char * hash_buf=(unsigned char*)malloc(65);
@@ -393,6 +390,7 @@ int main(int argc, char** argv){
             for (int i = 0; i < 32; ++i) {
                 sprintf(exHmac+ (i * 2),"%02X", mcBuf[i]);
             }
+            printf(" - HMAC(username|Hpassword) computed");
             char plaintext[64*2+US_LENGTH+2];
             sprintf(plaintext,"%s %s%s",username,hash_buf,exHmac);
             plaintext[strlen(username)+1+128]='\0';
@@ -407,27 +405,32 @@ int main(int argc, char** argv){
             cipherlen = outlen;
             ret=EVP_EncryptFinal(ctx, ciphertext + cipherlen, &outlen);
             if(ret == 0){
-                printf("Encryption Error \n");
-            }else{
-            printf("Correct Encryption\n");
+                printf(" - Encryption Error \n");
+                close(sd);
+                exit(1);
             }
             cipherlen += outlen;
             /* Context deallocation */
             EVP_CIPHER_CTX_free(ctx);
-            printf("Messagge Encrypted\n");
+            printf(" - Enc(username|H(password)|HMAC) computed\n");
             sendMsg("LOGIN",sd,6);
             sendMsg(ciphertext,sd,cipherlen);
-            printf("Messagge sended \n");
+            if (ret == -1){
+                printf(" - Send ciphertext error \n");
+                close(sd);
+                exit(1);
+            }
+            printf(" - Enc(username|H(password)|HMAC) sent correctly\n");
             char recvBuf[10];
             if(recvMsg(recvBuf,sd)==-1){
-                printf("Login Failed\n Exit\n");
+                printf(" - Login Failed\n");
                 close(sd);
                 exit(1);
             }
             if(strcmp(recvBuf,"LOGINOK")==0){
                 printf("Login successfully completed\n");
                 seq_nonce=atoi(nonce_buf);
-                printf("seq_nonce %d\n",seq_nonce);
+                // printf("seq_nonce %d\n",seq_nonce);
                 while (1){
                     int choice;
                     menu_operation();
@@ -442,7 +445,7 @@ int main(int argc, char** argv){
                         seq_nonce++;
                         char cipher[MSG_LENGTH];
                         char message[MSG_LENGTH/2];
-                        printf("Showing latest %d messages:\n",n);
+                        //printf("Showing latest %d messages...\n",n);
                         char *title;
                         char *author;
                         char *body;
@@ -484,11 +487,11 @@ int main(int argc, char** argv){
                         char *part4;
 
 
-                        printf("Insert the message identifier of the message to download it:\n");
+                        printf("Insert the mid to download the message:\n");
                         scanf("%d",&k);
                         sprintf(choice_buffer,"GET %d",k);
-                        printf("Downloading a specified message from the BBS...\n");
-                        printf("choice_buffer %s \n", choice_buffer);
+                        printf("Downloading the specified message from the BBS...\n");
+                        //printf("choice_buffer %s \n", choice_buffer);
 
                         messageDeliver(choice_buffer,session_key1,session_key2,sd,seq_nonce);
                             seq_nonce++;
@@ -497,9 +500,6 @@ int main(int argc, char** argv){
                         buffer_size=recvMsg(buffer,sd);
                         int res=messageReceipts(msg,buffer,buffer_size,session_key1,session_key2,seq_nonce);
                             seq_nonce++;
-
-
-                        printf("Msg: %s\n", msg);
          
                         part1 = strtok(msg, "_");
                         part2 = strtok(NULL, "_");
@@ -524,7 +524,7 @@ int main(int argc, char** argv){
                         
                         fclose(file);
 
-                        printf("You can find the message in the Download folder on your pc\n");
+                        printf("You can find the message in the Download folder on your pc.\n");
                         
                     }else if(choice == 3){
                         char title[20];
@@ -554,15 +554,12 @@ int main(int argc, char** argv){
                     }else if(choice == 4){
                         help();
                     }else if(choice == 5) {
-                        printf("Logout\n");
+                        printf("Logout...\n");
                         messageDeliver("OUT",session_key1,session_key2,sd,seq_nonce);
                         break;
                     }
                 }
-                
-
-            }
-            
+            }           
         }else if(var == 3){
             //Funzione di exit
             printf("Closing Application\n");
@@ -574,8 +571,6 @@ int main(int argc, char** argv){
         strcpy(email,"");
         strcpy(password,"");
     } while(1);
-
     close(sd);
-
     return 0;
 }

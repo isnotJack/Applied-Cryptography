@@ -1,5 +1,4 @@
 #include "utility.h"
-// definizione variabili per Diffie-Hellman
 EVP_PKEY * dh_params;      
 
 struct client {
@@ -103,7 +102,7 @@ int main(int argc, char** argv){
                     FD_SET(new_sd, &master);
                     if(new_sd > fdmax){ fdmax = new_sd; } 
                 }else{
-                    buffer_size=recvMsg(buffer,i);
+                    buffer_size=recvMsg(buffer,i);  // receive of a message through socket i
                     if(buffer_size==-1){
                         close(i);
                         FD_CLR(i, &master);
@@ -114,17 +113,19 @@ int main(int argc, char** argv){
                         printf("Handshake start...\n");
                         srand(time(NULL));
                         EVP_PKEY * priv_key;
-                        EVP_PKEY_CTX * DH_ctx; //--> Context for Diffi Hellman
-                        EVP_PKEY* DH_keys; // --> Contains both 'a' and 'G^a'
+                        EVP_PKEY_CTX * DH_ctx;  //--> Context for Diffi Hellman
+                        EVP_PKEY* DH_keys;      // --> Contains both 'a' and 'G^a'
                         // ricezione chiave pubblica del client (certificato)
                         long size = recvMsg(buffer,i);
                         if(size==-1){
+                            printf(" - Client certiifcate not received\n");
                             close(i);
                             FD_CLR(i, &master);
+                            strcpy(buffer,"");
                             continue;
                         }
                         insertFile(buffer, size, i);
-                        printf("Client certificate received \n");
+                        printf(" - Client certificate received \n");
 
                         // Invio chiave pubblica server   
                         
@@ -133,7 +134,7 @@ int main(int argc, char** argv){
                         priv_key = retrieve_privkey("server");
                         DH_keys = NULL;
                         DH_PubPriv(dh_params, &DH_keys, DH_ctx);   // generazione parametro privato b e pubblic g^b
-                        printf("Private/public pair for DH generated\n");
+                        printf(" - Private/public pair for DH generated\n");
                         EVP_PKEY_CTX_free(DH_ctx);
                         unsigned char* signature;
                         signature = malloc(EVP_PKEY_size(priv_key));
@@ -147,23 +148,26 @@ int main(int argc, char** argv){
                         unsigned char * DH_pub_client = malloc(2*KEY_LENGTH);
                         size=recvMsg(DH_pub_client,i);
                         if(size==-1){
+                            printf(" - g^a not received\n");
                             close(i);
                             FD_CLR(i, &master);
+                            strcpy(buffer,"");
                             continue;
                         }
-                        printf("g^a received correctly\n");
+                        printf(" - g^a received correctly\n");
 
                         client_sign_len=recvMsg(client_signature,i);
                         if(client_sign_len==-1){
+                            // signature on g^a not received
                             close(i);
                             FD_CLR(i, &master);
+                            strcpy(buffer,"");
                             continue;
                         }
-                        printf("Signature on g^a received correctly\n");
+                        printf(" - Signature on g^a received correctly\n");
                         
                         BIO *bio = BIO_new_mem_buf(DH_pub_client, size);
                         if (!bio) {
-                            // Errore nella creazione del BIO
                              close(i);
                              FD_CLR(i, &master);
                              continue;
@@ -171,40 +175,38 @@ int main(int argc, char** argv){
                         // Lettura della chiave pubblica dal BIO
                         DH_client_keys= PEM_read_bio_PUBKEY(bio, NULL, NULL, NULL);
                         if (!DH_client_keys) {
-                            // Errore nella lettura della chiave pubblica dal BIO
                             BIO_free(bio); // Liberare la memoria del BIO
                             close(i);
                             FD_CLR(i, &master);
                             continue;
                         }
-                        // Liberare la memoria del BIO
                         BIO_free(bio);
 
                         ret=Verify_Signature(DH_client_keys,C_pub_key,client_signature,client_sign_len);
                         if(ret!=1){
-                            printf("Signature Verification on g^a Error \n");
+                            printf(" - Signature Verification on g^a error \n");
                             close(i);
                             FD_CLR(i, &master);
                             continue;
                         }
-                        printf("Signature Verification on g^a Success \n");
+                        printf(" - Signature Verification on g^a Success \n");
 
                         if (!send_public_key(i,DH_keys)){
-                            printf("Error sending g^b\n");
+                            printf(" - Error sending g^b\n");
                             close(i);
                             FD_CLR(i, &master);
                             continue;
                         }
-                        printf("g^b sent correctly\n");
+                        printf(" - g^b sent correctly\n");
 
                         ret = sendMsg(signature,i,signature_length);
                         if (ret == -1){
-                            printf("Send signature on g^b error\n");
+                            printf(" - Send signature on g^b error\n");
                             close(i);
                             FD_CLR(i, &master);
                             continue;
                         }
-                        printf("Signature on g^b sent correctly\n");
+                        printf(" - Signature on g^b sent correctly\n");
                         
                         //DH_client_keys contains g^a
                         EVP_PKEY_CTX* ctx_drv = EVP_PKEY_CTX_new(DH_keys, NULL);
@@ -233,12 +235,12 @@ int main(int argc, char** argv){
                         //send nonce
                         ret = sendMsg(nonce_buf,i,strlen(nonce_buf)+1);
                         if (ret == -1){
-                            printf("Send nonce error\n");
+                            printf(" - Send nonce error\n");
                             close(i);
                             FD_CLR(i, &master);
                             continue;
                         }
-                        printf("Nonce sent correctly\n");
+                        printf(" - Nonce sent correctly\n");
 
                         //fulfil the data structure for the session parameters of the user
                         struct secret_Params * temp;
@@ -268,41 +270,48 @@ int main(int argc, char** argv){
                         printf("Handshake completed.\n");
                         strcpy(buffer,"");
                     }else if(strcmp(buffer,"REGISTRATION")==0){
-                         
                         printf("Registration start...\n");
                         EVP_PKEY * C_pub_key=retrieve_pubkey("server",i);
                         unsigned char *ciphertext = (unsigned char*)malloc(MAX_LENGTH+US_LENGTH+67 + 16); //--> Credenziali cifrate
                         int cipherlen = recvMsg(ciphertext,i);
                         if(cipherlen==-1){
+                            printf(" - Ciphertext of client's credentials not received\n");
+                            removeSessionParam(i,&sessionParam);
+                            strcpy(buffer,"");
                             close(i);
                             FD_CLR(i, &master);
                             continue;
                         }
-                        printf("Ciphertext of client's credentials received correctly\n");
+                        printf(" - Ciphertext of client's credentials received correctly\n");
                         
                         unsigned char * client_signature = malloc(EVP_PKEY_size(C_pub_key));
                         long client_sign_len=recvMsg(client_signature,i);
                         if(client_sign_len==-1){
+                            printf(" - Signature on ciphertext not received\n");
+                            removeSessionParam(i,&sessionParam);
+                            strcpy(buffer,"");
                             close(i);
                             FD_CLR(i, &master);
                             continue;
                         }
-                        printf("Signature on ciphertext received correctly\n");
+                        printf(" - Signature on ciphertext received correctly\n");
 
                         ret=Verify_Signature_Msg(ciphertext,C_pub_key,client_signature,client_sign_len);
                         if(ret!=1){
-                            printf("Signature Verification on received ciphertext Error \n");
+                            printf(" - Signature Verification on received ciphertext Error \n");
+                            removeSessionParam(i,&sessionParam);
+                            strcpy(buffer,"");
                             close(i);
                             FD_CLR(i, &master);
                             continue;
                         }
-                        printf("Signature Verification on received ciphertext Success \n");
+                        printf(" - Signature Verification on received ciphertext Success \n");
 
                         //Decifro le credenziali
                         unsigned char * session_key1 = (unsigned char*)malloc(EVP_MD_size(EVP_sha256())); 
                         
                         //recupero session key
-                        struct secret_Params * temp=sessionParam;
+                        struct secret_Params * temp = sessionParam;
                         while(temp != NULL){
                             if(temp->sd==i){
                                 session_key1=temp->session_key1;
@@ -311,7 +320,9 @@ int main(int argc, char** argv){
                             temp=temp->next;
                         }
                         if(temp==NULL){
-                            printf("Session key Not Found \n");
+                            printf(" - Session key Not Found \n");
+                            removeSessionParam(i,&sessionParam);
+                            strcpy(buffer,"");
                             close(i);
                             FD_CLR(i, &master);
                             continue;
@@ -327,18 +338,21 @@ int main(int argc, char** argv){
                         plainlen = outlen;
                         ret = EVP_DecryptFinal(ctx, plaintext + plainlen, &outlen);
                         if(ret == 0){
-                            printf("Decryption Error \n");
-                        }else{
-                         printf("Correct Decryption: username, email, H(password) received\n");
+                            printf(" - Decryption Error \n");
+                            removeSessionParam(i,&sessionParam);
+                            strcpy(buffer,"");
+                            close(i);
+                            FD_CLR(i, &master);
+                            continue;
                         }
+                        printf(" - Correct Decryption: username|email|H(password)\n");
                         plainlen += outlen;
                         EVP_CIPHER_CTX_free(ctx);
-                        
                         
                         char username [US_LENGTH];
                         char email [MAX_LENGTH];
                         unsigned char pswd[65];
-                        //parse del plaintext 
+                        // parse del plaintext 
                         sscanf(plaintext,"%s %s",username,email);
                         int start=strlen(username)+strlen(email)+2;
                         int end =start+64;
@@ -349,25 +363,32 @@ int main(int argc, char** argv){
                         struct client * app=users;  
                         while(app!=NULL){
                             if(strcmp(app->username,username)==0 || strcmp(app->email,email)==0){
-                                printf("Registration Failed \nCredential already used \n");
+                                printf(" - Registration Failed: Credential already used \n");
                                 char msg[]="FAILED\0";
                                 ret = sendMsg(msg,i,strlen(msg));
                                 if (ret == -1){
-                                    printf("Send Failed message error\n");
+                                    printf(" - Send of Failed message error\n");
                                     close(i);
                                     FD_CLR(i, &master);
-                                    continue;
+                                    break;
                                 }
                                 break;
                             }
                             app=app->next;
+                        }
+                        if (ret == -1){
+                            removeSessionParam(i,&sessionParam);
+                            strcpy(buffer,"");
+                            continue;
                         }
                        
                         if(app == NULL){
                             char msg[]="REGOK\0";
                             ret = sendMsg(msg,i,strlen(msg));
                             if (ret == -1){
-                                printf("Send RegOK message error\n");
+                                printf(" - Send of RegOK message error\n");
+                                removeSessionParam(i,&sessionParam);
+                                strcpy(buffer,"");
                                 close(i);
                                 FD_CLR(i, &master);
                                 continue;
@@ -383,18 +404,24 @@ int main(int argc, char** argv){
                             memset(chall_recv, 0, sizeof(chall_recv));
                             int chall_resp;
                             if(recvMsg(chall_recv,i)==-1){
+                                printf(" - Challenge responce not received correcty\n");
+                                removeSessionParam(i,&sessionParam);
+                                strcpy(buffer,"");
                                 close(i);
                                 FD_CLR(i, &master);
+                                continue;
                             }
-                            printf("Challenge response received correctly\n");
+                            printf(" - Challenge response received correctly\n");
                             
                             sscanf(chall_recv,"%d",&chall_resp);
                             if(challenge == chall_resp){
-                                printf("Challenge completed\n");
+                                printf(" - Challenge completed\n");
                                 char msg[]="CHALOK\0";
                                 ret = sendMsg(msg,i,strlen(msg));
                                 if (ret == -1){
-                                    printf("Send ChalOK message error\n");
+                                    printf(" - Send ChalOK message error\n");
+                                    removeSessionParam(i,&sessionParam);
+                                    strcpy(buffer,"");
                                     close(i);
                                     FD_CLR(i, &master);
                                     continue;
@@ -413,33 +440,29 @@ int main(int argc, char** argv){
                                 }
                             remove(path);  
                         }
-                        
-                        if(removeSessionParam(i,&sessionParam))
-                            printf("Parametri deallocati\n");
-                        else 
-                            printf("Parametri non trovati\n");
+                        removeSessionParam(i,&sessionParam);
                         printf("User registration completed.\n");
-                        
                         strcpy(buffer,"");
                     }else if(strcmp(buffer,"LOGIN")==0){
-                        printf("Starting Login Phase \n");
-                        unsigned char * session_key1=(unsigned char*)malloc(EVP_MD_size(EVP_sha256())); 
+                        printf("Starting Login Phase...\n");
+                        unsigned char * session_key1 = (unsigned char*)malloc(EVP_MD_size(EVP_sha256())); 
                         unsigned char * ciphertext = (unsigned char*)malloc(US_LENGTH+64*2+2+16); //--> Credenziali cifrate
                         int cipherlen = recvMsg(ciphertext,i);
-                        if(cipherlen==-1){
+                        if(cipherlen == -1){
+                            strcpy(buffer,"");
                             close(i);
                             FD_CLR(i, &master);
                             continue;
                         }
-                        printf("Ciphertext of client's credentials received correctly\n");
-                        struct secret_Params * temp_session=sessionParam;
+                        printf(" - Ciphertext of client's credentials received correctly\n");
+                        struct secret_Params * temp_session = sessionParam;
                         bool login_error=false;
                         while(temp_session!=NULL){
                             if(temp_session->sd==i){
                                 session_key1=strdup(temp_session->session_key1);
                                 if(temp_session->is_logged){
-                                    printf("Already logged\n");
-                                    login_error=true;
+                                    printf(" - User already logged\n");
+                                    login_error = true;
                                     break;
                                 }
                                 break;
@@ -462,11 +485,13 @@ int main(int argc, char** argv){
                         ret = EVP_DecryptFinal(ctx, plaintext + plainlen, &outlen);
                         plainlen += outlen;
                         if(ret == 0){
-                            printf("Decryption Error \n");
-                        }else{
-                         printf("Correct Decryption: username, H(password), HMAC\n");
+                            printf(" - Decryption Error \n");
+                            strcpy(buffer,"");
+                            close(i);
+                            FD_CLR(i, &master);
+                            continue;
                         }
-                        
+                        printf(" - Correct Decryption: username|H(password)|HMAC\n");
                         EVP_CIPHER_CTX_free(ctx);
                         
                         char username [US_LENGTH];
@@ -491,9 +516,9 @@ int main(int argc, char** argv){
                         int key2_size;
                         while(temp_client!=NULL){
                             if(strcmp(temp_client->username,username)==0){
-                                printf("Found User\n");
+                                printf(" - User found\n");
                                 if(CRYPTO_memcmp(temp_client->pswdHash, Hpswd,EVP_MD_size(EVP_sha256())) == 0){
-                                    printf("Password Corrisponding\n");
+                                    printf(" - Password Corrisponding\n");
                                     char key2[75];
                                     sprintf(key2,"%s%s",Hpswd,temp_session->nonce);
                                     key2_size=Hash(session_key2,key2,strlen(key2));
@@ -504,7 +529,8 @@ int main(int argc, char** argv){
                             temp_client=temp_client->next;
                         }
                         if(temp_client ==NULL){
-                            printf("User not found or incorrect password\n");
+                            printf(" - User not found or password not correct\n");
+                            strcpy(buffer,"");
                             close(i);
                             FD_CLR(i,&master);
                             continue;
@@ -520,17 +546,19 @@ int main(int argc, char** argv){
                             sprintf(exHmac+ (i * 2),"%02X", mcBuf[i]);
                         }
                         if(CRYPTO_memcmp(Hmac, exHmac,64) != 0){
-                            printf("Mac Verification failed\n");
+                            printf(" - Mac Verification failed\n");
+                            strcpy(buffer,"");
                             close(i);
                             FD_CLR(i,&master);
                             continue;
                         }
-                        printf("Mac Verification completed\n");
+                        printf(" - Mac Verification completed\n");
                         sendMsg("LOGINOK",i,8);
-                        temp_session->is_logged=true;
+                        temp_session->is_logged = true;
                         strcpy(buffer,"");
                         free(plaintext);
                         free(ciphertext);
+                        printf("User %s logged in successfully.\n", username);
                     }
                     else{
                         //Check if logged
@@ -549,7 +577,7 @@ int main(int argc, char** argv){
                         }
                         char msg[MSG_LENGTH];
                         int req_nonce=atoi(temp_session->nonce);
-                        printf("Prima di message receipts\n");
+                        
                         int res=messageReceipts(msg,buffer,buffer_size,temp_session->session_key1,temp_session->session_key2,req_nonce);
                         if(res==0){
                             req_nonce++;
@@ -558,7 +586,6 @@ int main(int argc, char** argv){
                             continue;
                         }
                         //msg=CMD OPERANDS
-                        printf("Msg: %s\n", msg);
                         if(strncmp(msg,"LST",3)==0){
                             int n;
                             char cmd[4];
@@ -574,7 +601,7 @@ int main(int argc, char** argv){
                                 n=max_msg;
                             char message[MSG_LENGTH];
                             temp=board;
-
+                            printf("Sending the latest %d messages to the client...\n", n);
                             for(int j=0;j<n;j++){
                                 if(temp==NULL)
                                     break;
@@ -588,7 +615,8 @@ int main(int argc, char** argv){
                             messageDeliver("END",temp_session->session_key1,temp_session->session_key2,i,req_nonce);
                             req_nonce++;
                             sprintf(temp_session->nonce,"%d",req_nonce);
-
+                            printf("Messages sent correctly.\n");
+                            strcpy(buffer,"");
                         }else if(strncmp(msg,"ADD",3)==0){
                             printf("Adding a new message to the BBS...\n");
                             char title[20];
@@ -639,52 +667,39 @@ int main(int argc, char** argv){
                                 printf("--------------------------------\n");
                                 temp_post = temp_post->next;
                             }
+                            strcpy(buffer,"");
                         }else if(strncmp(msg,"GET",3)==0){
-                            printf("sono entrato %s\n", msg);
                             char cmd[4];
                             int mid;
                             int returns;
                             char get_buffer[550];
                             sscanf(msg, "%s %d", cmd,&mid);
-
-                            struct post * temp_post=board;
+                            struct post * temp_post = board;
+                            printf("Request for message %d\n", mid);
                             while(temp_post!=NULL){
                                 if(temp_post->mid == mid){
-                                    printf("Found MSG\n");
-                                    printf("title %s, author %s , body %s\n",temp_post->title, temp_post->author, temp_post->body);
-                                    printf("title_len %ld, author %ld , body %ld\n",strlen(temp_post->title), strlen(temp_post->author), strlen(temp_post->body));
+                                    printf("Title: %s\n Author: %s\n Body: %s\n",temp_post->title, temp_post->author, temp_post->body);
 
                                     sprintf(get_buffer, "%d_%s_%s_%s",temp_post->mid, temp_post->title, temp_post->author, temp_post->body);
                                     get_buffer[sizeof(mid)+543] = '\0';
-                                    printf("get buffer %s \n", get_buffer);
                                     returns = messageDeliver(get_buffer,temp_session->session_key1,temp_session->session_key2,i,req_nonce);
-
-                                        printf("sono entrato \n");
+                                    if (returns != -1){
                                         req_nonce++;
                                         sprintf(temp_session->nonce,"%d",req_nonce);
-
-                                    if (returns == -1){
-                                        close(i);
-                                        FD_CLR(i, &master);
-                                        continue;
-                                    }
+                                        printf("Message delivered correctly.\n");
+                                    } else
+                                        printf("Problems delivering message %d\n", mid);
                                     break;
-                                    
                                 }
                                 temp_post=temp_post->next;
                             }
-
-
-
+                            strcpy(buffer,"");
                         }else if(strncmp(msg,"OUT",3)==0){
                             temp_session->is_logged=false;
-                        }else{
-                            //errore O CLOSE(I)
+                            strcpy(buffer,"");
+                            removeSessionParam(i,&sessionParam);
                         }
-
-                        strcpy(buffer,"");
                     }
-
                 }
             }
         }
