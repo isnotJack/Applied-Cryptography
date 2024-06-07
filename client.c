@@ -559,7 +559,9 @@ int main(int argc, char** argv){
                         break;
                     }
                 }
-            }           
+            }else{
+                printf("Login failed\n");
+            }          
         }else if(var == 3){
             //Funzione di exit
             printf("Closing Application\n");
