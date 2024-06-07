@@ -71,7 +71,7 @@ int messageReceipts(char * msg,unsigned char * ciphertext,int cipherlen,unsigned
     plainlen = outlen;
     int ret = EVP_DecryptFinal(ctx, plaintext + plainlen, &outlen);
     plainlen += outlen;
-    // printf("Plaintext %s\n",plaintext);
+    
     if(ret == 0){
         printf(" - Decryption Error \n");
         return 1;
@@ -89,11 +89,11 @@ int messageReceipts(char * msg,unsigned char * ciphertext,int cipherlen,unsigned
         sscanf(exmsg + (i * 2), "%2hhx", &msg[i]);
     }
     msg[buffer_len]='\0';
-    //printf("Messaggio convertito %s\n",msg);
+   
     recHmac[64]='\0';
     sprintf(HP_buf,"%s %d",exmsg,recNonce);
     int HP_buf_len=strlen(HP_buf);
-    // printf("Hp buf len %d\n",HP_buf_len);
+    
     HP_buf[HP_buf_len]='\0';
     char mcBuf[33];
     int mac_len;
@@ -105,16 +105,12 @@ int messageReceipts(char * msg,unsigned char * ciphertext,int cipherlen,unsigned
         sprintf(exHmac+ (i * 2),"%02X", mcBuf[i]);
     }
     exHmac[64]='\0';
-    //printf("Mac generated %s\nMac received %s\n",exHmac,recHmac);
-    // printf("nonce %d\n",recNonce);
+    
     if(CRYPTO_memcmp(recHmac, exHmac,64) != 0){
-        //GESTIONE ERRORE
         printf(" - MAC verification error\n");
         return 1;
     }
     printf(" - MAC verification success!\n");
-    // printf("Dopo verification\n");
-    // printf("Seq nonce: %d\n", seq_nonce);
     if(recNonce == seq_nonce){
         printf(" - Correct sequence number\n");
         return 0;
@@ -139,7 +135,6 @@ int messageDeliver(char * msg,unsigned char * session_key1,unsigned char * sessi
     exmsg[msg_len*2]='\0';
     char HP_buf[msg_len*2+12];
     sprintf(HP_buf,"%s %d",exmsg,seq_nonce);
-    // printf("strlen(HP_buf): %ld\n",strlen(HP_buf));
     HMAC(EVP_sha256(), session_key2, key_size, HP_buf,(strlen(HP_buf)), mcBuf, &outlen); 
     unsigned char exHmac[65];
     for (int i = 0; i < 32; ++i) {
@@ -148,10 +143,9 @@ int messageDeliver(char * msg,unsigned char * session_key1,unsigned char * sessi
     exHmac[64]='\0';
     printf(" - HMAC of (Msg|Nonce) computed.\n");
 
-    // printf("exHmac %s\n",exHmac);
     char plaintext[64 + strlen(HP_buf)+2];
     sprintf(plaintext,"%s %s",HP_buf,exHmac);
-    // printf("Delivered plaintext %s\n",plaintext);
+    
     unsigned char * ciphertext = (unsigned char*)malloc(sizeof(plaintext) + 16);
     int cipherlen;
     EVP_CIPHER_CTX* ctx;
@@ -211,18 +205,16 @@ int Hash(unsigned char * digest, unsigned char *msg ,int msg_len){
  int Verify_Signature(EVP_PKEY * DH_keys,EVP_PKEY * pubkey, unsigned char * signature, int signature_length){
      EVP_MD_CTX* VER_ctx = EVP_MD_CTX_new();
     EVP_VerifyInit(VER_ctx, EVP_sha256());
-    BIO *bio = BIO_new(BIO_s_mem()); // Creazione di un BIO in memoria
+    BIO *bio = BIO_new(BIO_s_mem()); 
     if (!bio) {
-        return -1; // Errore nella creazione del BIO
+        return -1; 
     }
 
-    // Scrittura della chiave pubblica nel BIO
     if (!PEM_write_bio_PUBKEY(bio, DH_keys)) {
-        BIO_free(bio); // Liberare la memoria del BIO
-        return -1; // Errore nella scrittura della chiave pubblica nel BIO
+        BIO_free(bio); 
+        return -1; 
     }
 
-    // Ottieni il puntatore al buffer di dati BIO
     char *buffer_data;
     long buffer_length = BIO_get_mem_data(bio, &buffer_data);
     
@@ -239,36 +231,33 @@ int Digital_Signature(EVP_PKEY * priv_key, EVP_PKEY * DH_keys, unsigned char * s
     EVP_MD_CTX* ctx = EVP_MD_CTX_new();
     EVP_SignInit(ctx, EVP_sha256());
     char * buffer;
-    BIO *bio = BIO_new(BIO_s_mem()); // Creazione di un BIO in memoria
-    //da mettere in una funzione
+    BIO *bio = BIO_new(BIO_s_mem()); 
+
     if (!bio) {
-        return -1; // Errore nella creazione del BIO
+        return -1; 
     }
    
-    // Scrittura della chiave pubblica nel BIO
     if (!PEM_write_bio_PUBKEY(bio, DH_keys)) {
-        BIO_free(bio); // Liberare la memoria del BIO
+        BIO_free(bio); 
         printf("PEM WRITE ERROR \n");
-        return -1; // Errore nella scrittura della chiave pubblica nel BIO
+        return -1; 
     }
     
-    // Ottieni il puntatore al buffer di dati BIO
+    
     long buffer_length = BIO_get_mem_data(bio, &buffer);
 
     EVP_SignUpdate(ctx, (unsigned char*)buffer,buffer_length);
     EVP_SignFinal(ctx, signature, &signature_len,priv_key);
     printf(" - Signature on DH public parameter done \n");
     EVP_MD_CTX_free(ctx);
-    BIO_free(bio); // Liberare la memoria del BIO
+    BIO_free(bio); 
     return signature_len;
 }
 
-// Firma digitale su un messaggio
 int Digital_Signature_Msg(EVP_PKEY * priv_key, unsigned char * msg, unsigned char * signature){
     int signature_len;
     EVP_MD_CTX* ctx = EVP_MD_CTX_new();
     EVP_SignInit(ctx, EVP_sha256());
-    // Ottieni il puntatore al buffer di dati BIO
     EVP_SignUpdate(ctx, (unsigned char*)msg,sizeof(msg));
     EVP_SignFinal(ctx, signature, &signature_len,priv_key);
     printf(" - Signature on Enc(username, email, H(password)) done \n");
@@ -286,7 +275,6 @@ int Verify_Signature_Msg(unsigned char * ciphertext,EVP_PKEY * pubkey, unsigned 
  }
 
 void keys_generation(char * username){
-    //Generazione chiave privata
     char priv_command[PRIV_CMD_lENGTH];
     char pub_command[PUB_CMD_LENGTH];
     if(strcmp(username,"server")==0){
@@ -297,7 +285,6 @@ void keys_generation(char * username){
         sprintf(pub_command,"openssl rsa -pubout -in ./keys_clients/rsa_privkey_%s.pem -out ./keys_clients/rsa_pubkey_%s.pem",username,username);
     }
     
-    // Problema dell'injection
     system(priv_command);
     system(pub_command);
 
@@ -381,17 +368,16 @@ void insertFile(char *buffer,int size, int i){
     }
     BIO *bio = BIO_new_mem_buf(buffer, size);
     if (!bio) {
-        // Errore nella creazione del BIO
         return ;
     }
-    // Lettura della chiave pubblica dal BIO
+    
     EVP_PKEY *public_key = PEM_read_bio_PUBKEY(bio, NULL, NULL, NULL);
     if (!public_key) {
-        // Errore nella lettura della chiave pubblica dal BIO
-        BIO_free(bio); // Liberare la memoria del BIO
+        
+        BIO_free(bio); 
         return ;
     }
-    // Liberare la memoria del BIO
+    
     BIO_free(bio);
 
     PEM_write_PUBKEY(file,public_key);
@@ -400,8 +386,7 @@ void insertFile(char *buffer,int size, int i){
 
 bool checkInput(char * input){
     regex_t regex;     
-    int expr = regcomp(&regex, "^([A-Za-z@.0-9]+)$", REG_EXTENDED);
-    // Controlla se l'input soddisfa l'espressione regolare    
+    int expr = regcomp(&regex, "^([A-Za-z@.0-9]+)$", REG_EXTENDED);   
     expr = regexec(&regex, input, 0, NULL, 0);    
 
     regfree(&regex);     
@@ -414,29 +399,23 @@ bool checkInput(char * input){
 
 bool send_public_key(int socket, EVP_PKEY *public_key) {
     int ret;
-    BIO *bio = BIO_new(BIO_s_mem()); // Creazione di un BIO in memoria
+    BIO *bio = BIO_new(BIO_s_mem()); 
     if (!bio)
-        return 0; // Errore nella creazione del BIO
+        return 0;
  
-    // Scrittura della chiave pubblica nel BIO
+   
     if (!PEM_write_bio_PUBKEY(bio, public_key)) {
-        BIO_free(bio);  // Liberare la memoria del BIO
-        return 0;       // Errore nella scrittura della chiave pubblica nel BIO
+        BIO_free(bio);  
+        return 0;       
     }
  
-    // Ottieni il puntatore al buffer di dati BIO
     char *buffer_data;
     long buffer_length = BIO_get_mem_data(bio, &buffer_data);
     ret = sendMsg(buffer_data,socket,buffer_length);
     if (ret == -1)
         return 0;
 
-    // long lmsg=htonl(buffer_length);
-    // send(socket, (void*) &lmsg, sizeof(uint32_t), 0);
-    // // Invia la chiave pubblica sul socket
-    // send(socket,(void *) buffer_data,buffer_length,0);
-
-    BIO_free(bio); // Liberare la memoria del BIO
-    return 1; // Invio della chiave pubblica completato con successo
+    BIO_free(bio); 
+    return 1; 
 }
 

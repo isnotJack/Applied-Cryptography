@@ -1,9 +1,8 @@
 #include "utility.h"
 
-//GLOBAL FOR SCOPE
-EVP_PKEY * pubkey;         // per contenere la chiave pubblica da inviare al server
-EVP_PKEY * serverKey;      // per la chiave pubblica del server (utile per verificare la sua firma)
-// Parametri Diffie-Hellman
+EVP_PKEY * pubkey;         
+EVP_PKEY * serverKey;      
+
 EVP_PKEY * dh_params;
 int seq_nonce=0;    
 
@@ -30,7 +29,7 @@ int start(){
 void handshake(char * username,int sd,unsigned char* session_key1,int key1_len,char * nonce_buf){
     EVP_PKEY_CTX * DH_ctx;
     EVP_PKEY* DH_keys;
-    EVP_PKEY * priv_key;        // per la chiave privata usata per firmare
+    EVP_PKEY * priv_key;        
     int ret;
 
     pubkey = retrieve_pubkey(username,0);
@@ -42,14 +41,14 @@ void handshake(char * username,int sd,unsigned char* session_key1,int key1_len,c
         close(sd);
         exit(1);
     }
-    if (!send_public_key(sd, pubkey)){            // invio al server della chiave pubblica RSA
+    if (!send_public_key(sd, pubkey)){            // "sending certificate"
         printf(" - Error sending RSA public key\n");
         close(sd);
         exit(1);
     }
     printf(" - RSA public key sent correctly\n");
 
-    //Chiave pubblica server letta da file del server "keys_server" (BARBINO)
+    // server's public key read read from file
     serverKey = retrieve_pubkey("server",-1);
 
     // Genearation of public/private pair
@@ -58,7 +57,7 @@ void handshake(char * username,int sd,unsigned char* session_key1,int key1_len,c
     DH_PubPriv(dh_params,&DH_keys,DH_ctx);
     printf(" - Private/public pair for DH generated\n");
 
-    priv_key = retrieve_privkey(username);   // chiave per poter firmare il parametro pubblico di DH
+    priv_key = retrieve_privkey(username); 
     unsigned char * signature;
     signature = malloc(EVP_PKEY_size(priv_key));
     int signature_length=Digital_Signature(priv_key,DH_keys,signature);
@@ -78,7 +77,6 @@ void handshake(char * username,int sd,unsigned char* session_key1,int key1_len,c
     }
     printf(" - Signature on g^a sent correctly\n");
 
-    /////////RICEVO DAL SERVER ///////
     EVP_PKEY * DH_server_keys;
     
     unsigned char * server_signature = malloc(EVP_PKEY_size(serverKey));
@@ -103,15 +101,13 @@ void handshake(char * username,int sd,unsigned char* session_key1,int key1_len,c
 
     BIO *bio = BIO_new_mem_buf(DH_pub_server, size);
      if (!bio) {
-        // Errore nella creazione del BIO
-            close(sd);
-            exit(1);
+        close(sd);
+        exit(1);
     }
-    // Lettura della chiave pubblica dal BIO
+    
     DH_server_keys= PEM_read_bio_PUBKEY(bio, NULL, NULL, NULL);
     if (!DH_server_keys) {
-        // Errore nella lettura della chiave pubblica dal BIO
-        BIO_free(bio); // Liberare la memoria del BIO
+        BIO_free(bio); 
         close(sd);
         exit(1);
     }
@@ -141,8 +137,7 @@ void handshake(char * username,int sd,unsigned char* session_key1,int key1_len,c
     //generate first session key-->hash(secret)
     key1_len = Hash(session_key1, secret, secretlen);
 
-    // ricezione del nonce che verrà usato per generare l'altra chiave di sessione
-    // utile solo quando l'handshake è seguito dal login
+    // nonce used to generate SessionKey2 when handshake is followed by login phase
     if(recvMsg(nonce_buf,sd)==-1){
         printf(" - Error receiving nonce\n");
         close(sd);
@@ -150,7 +145,7 @@ void handshake(char * username,int sd,unsigned char* session_key1,int key1_len,c
     }
     printf(" - Nonce received correctly\n");
 
-    //Eliminazione a g^a g^b g^ab
+    //Delete a g^ab
     free(secret);
     EVP_PKEY_free(DH_keys);
     EVP_PKEY_free(DH_server_keys);
@@ -160,7 +155,6 @@ void handshake(char * username,int sd,unsigned char* session_key1,int key1_len,c
 
 void registration(char email[],char username[],char password[],int sd){
     int ret;
-    //inserire credenziali
     printf("Insert the following parameters\n");
     do{
         printf("Email: ");
@@ -188,11 +182,11 @@ void registration(char email[],char username[],char password[],int sd){
     unsigned char * session_key1 = (unsigned char*)malloc(EVP_MD_size(EVP_sha256()));
     int key1_len;
     char nonce_buf[11];
-    handshake(username, sd,session_key1,key1_len,nonce_buf);     // esecuzione protocollo di handshake
+    handshake(username, sd,session_key1,key1_len,nonce_buf);  
     
 
     printf("Registration start...\n");
-    // mandare credenziali cifrate e con firma
+
     unsigned char * pswdHash;
     pswdHash = (unsigned char*)malloc(33);
     int pswdHashLen=Hash(pswdHash,password,strlen(password));
@@ -206,11 +200,11 @@ void registration(char email[],char username[],char password[],int sd){
     sprintf(sendBuffer,"%s %s %s",username,email,hash_buf);
     
     EVP_PKEY * priv_key=retrieve_privkey(username);
-    unsigned char * ciphertext = (unsigned char*)malloc(sizeof(sendBuffer) + 16); //--> Credenziali cifrate
+    unsigned char * ciphertext = (unsigned char*)malloc(sizeof(sendBuffer) + 16); 
     memset(ciphertext,0,(sizeof(sendBuffer) + 16));
     int cipherlen;
     int outlen;
-    //Cifro send buffer con k1
+    
     EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
     EVP_EncryptInit(ctx, EVP_aes_256_ecb(), session_key1, NULL);
     EVP_EncryptUpdate(ctx, ciphertext, &outlen,(unsigned char*)sendBuffer, sizeof(sendBuffer));
@@ -219,11 +213,8 @@ void registration(char email[],char username[],char password[],int sd){
     cipherlen += outlen;
     EVP_CIPHER_CTX_free(ctx);
     
-    //firmo send buffer cifrato
     unsigned char * signature=malloc(EVP_PKEY_size(priv_key));
     int signature_length=Digital_Signature_Msg(priv_key,ciphertext,signature);
-    
-    //invio credenziali cifrate + firma digitale
 
     ret = sendMsg("REGISTRATION",sd,13);
     if (ret == -1){
@@ -287,7 +278,6 @@ void registration(char email[],char username[],char password[],int sd){
 void login(char username[],char password[]){
     int ret;
 
-    //inserire credenziali
     printf("Insert the following parameters\n");
     do{
         printf("Username: "); 
@@ -430,22 +420,30 @@ int main(int argc, char** argv){
             if(strcmp(recvBuf,"LOGINOK")==0){
                 printf("Login successfully completed\n");
                 seq_nonce=atoi(nonce_buf);
-                // printf("seq_nonce %d\n",seq_nonce);
+                
                 while (1){
-                    int choice;
+                    int choice = 0;
                     menu_operation();
-                    scanf("%d",&choice);
-                    int n;
+                    if (scanf("%d",&choice)!=1){
+                        while (getchar() != '\n');
+                        continue;
+                    }
+                    
+                    int n = 0;
                     if(choice == 1){
                         char list_buffer[10];
                         printf("Insert the number of latest messages to see:\n");
-                        scanf("%d",&n);
+                        if (scanf("%d",&n) == 0){
+                            printf("Invalid input\n");
+                            while (getchar() != '\n');
+                            continue;
+                        }
                         sprintf(list_buffer,"LST %d",n);
                         messageDeliver(list_buffer,session_key1,session_key2,sd,seq_nonce);
                         seq_nonce++;
                         char cipher[MSG_LENGTH];
                         char message[MSG_LENGTH/2];
-                        //printf("Showing latest %d messages...\n",n);
+                        
                         char *title;
                         char *author;
                         char *body;
@@ -486,12 +484,15 @@ int main(int argc, char** argv){
                         char *part3;
                         char *part4;
 
-
                         printf("Insert the mid to download the message:\n");
-                        scanf("%d",&k);
+                        if (scanf("%d",&k) == 0){
+                            printf("Invalid input\n");
+                            while (getchar() != '\n');
+                            continue;
+                        }
+
                         sprintf(choice_buffer,"GET %d",k);
                         printf("Downloading the specified message from the BBS...\n");
-                        //printf("choice_buffer %s \n", choice_buffer);
 
                         messageDeliver(choice_buffer,session_key1,session_key2,sd,seq_nonce);
                             seq_nonce++;
@@ -500,16 +501,16 @@ int main(int argc, char** argv){
                         buffer_size=recvMsg(buffer,sd);
                         int res=messageReceipts(msg,buffer,buffer_size,session_key1,session_key2,seq_nonce);
                             seq_nonce++;
+
+                        if (strcmp(msg,"NOMID") == 0){
+                            printf("Message ID not found.\n");
+                            continue;
+                        }
          
                         part1 = strtok(msg, "_");
                         part2 = strtok(NULL, "_");
                         part3 = strtok(NULL, "_");
                         part4 = strtok(NULL, "_");
-
-                        if (part1 != NULL) printf("Part 1: %s\n", part1);
-                        if (part2 != NULL) printf("Part 2: %s\n", part2);
-                        if (part3 != NULL) printf("Part 3: %s\n", part3);
-                        if (part4 != NULL) printf("Part 4: %s\n", part4);
 
                         sprintf(path, "./Download/message_%s.txt",part1);
                         
@@ -531,8 +532,8 @@ int main(int argc, char** argv){
                         char body[500];
                         char add_buffer[547];
                         printf("Adding a new message to the BBS...\n");
-                        printf("Title:\n");
                         while(getchar() !='\n');
+                        printf("Title:\n");
                         fgets(title, sizeof(title), stdin);
                         int len = strlen(title);
                         if (len > 0 && title[len - 1] == '\n') {
@@ -540,7 +541,9 @@ int main(int argc, char** argv){
                         }
                         // author is in "username"
                         printf("Body of the message:\n");
+                        while(getchar() !='\n');
                         fgets(body, sizeof(body), stdin);
+                        //while(getchar() !='\n');
                         len = strlen(body);
                         if (len > 0 && body[len - 1] == '\n') {
                             body[len - 1] = '\0';
@@ -563,7 +566,6 @@ int main(int argc, char** argv){
                 printf("Login failed\n");
             }          
         }else if(var == 3){
-            //Funzione di exit
             printf("Closing Application\n");
             close(sd);
             return 0;

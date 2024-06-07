@@ -24,7 +24,7 @@ int main(int argc, char** argv){
     char buffer[16+64+MSG_LENGTH];
     struct post * board= NULL;
     int message_id = 0;
-    int buffer_size;
+    int buffer_size = 0;
     int fdmax; 
     int i;
     struct secret_Params * sessionParam= NULL;
@@ -40,29 +40,28 @@ int main(int argc, char** argv){
     }
     
     if (argc == 1)
-        srv_port = 4242;            // server in ascolto sulla porta 4242
+        srv_port = 4242;            
     else
-        srv_port = atoi(argv[1]);   // server in ascolto sulla porta passata come parametro al comando
+        srv_port = atoi(argv[1]);   
         
-    listener = socket(AF_INET, SOCK_STREAM, 0); // creazione socket di ascolto 
+    listener = socket(AF_INET, SOCK_STREAM, 0);  
     if (listener == -1){
         printf("Error creating the listening socket\n");
         exit(1);
     }
 
-    /* Creazione indirizzo di bind */
     memset(&my_addr, 0, sizeof(my_addr)); 
     my_addr.sin_family = AF_INET;
     my_addr.sin_port = htons(srv_port);
     //my_addr.sin_addr.s_addr = INADDR_ANY;
     inet_pton(AF_INET, "127.0.0.1", &my_addr.sin_addr);
 
-    ret = bind(listener, (struct sockaddr*)&my_addr, sizeof(my_addr)); // associazione socket ip
+    ret = bind(listener, (struct sockaddr*)&my_addr, sizeof(my_addr)); 
     if (ret == -1){
         printf("bind() error\n");
         exit(1);
     }
-    ret = listen(listener, 10); //server in ascolto su socket listener con coda di max 10 client
+    ret = listen(listener, 10); 
     if (ret == -1){
         printf("listen() error\n");
         exit(1);
@@ -70,16 +69,15 @@ int main(int argc, char** argv){
 
     FD_ZERO(&master);
     FD_ZERO(&read_fds);
-    FD_SET(0, &master);             // aggiungo il descrittore 0 (stdin) al set dei socket monitorati
-    FD_SET(listener, &master);      // aggiungo il listener al set dei socket monitorati
-    fdmax = listener;               // il maggiore dei descrittori ora è il listener
+    FD_SET(0, &master);             
+    FD_SET(listener, &master);      
+    fdmax = listener;               
     addrlen = sizeof(cl_addr);
 
-    keys_generation("server");      // generazione delle chiavi RSA pubblica e privata usate per la firma digitale
+    keys_generation("server");      // RSA private-public key pairs generation for digital signature
 
     DH_parameter_generation();      
     
-    // Recover p and g
     dh_params = EVP_PKEY_new();
     EVP_PKEY_set1_DH(dh_params, DH_get_2048_224());
 
@@ -102,8 +100,10 @@ int main(int argc, char** argv){
                     FD_SET(new_sd, &master);
                     if(new_sd > fdmax){ fdmax = new_sd; } 
                 }else{
+                    buffer_size = 0;
                     buffer_size=recvMsg(buffer,i);  // receive of a message through socket i
-                    if(buffer_size==-1){
+                    //printf("Buffer size: %d\n", buffer_size);
+                    if(buffer_size<=0){
                         close(i);
                         FD_CLR(i, &master);
                         strcpy(buffer,"");
@@ -114,9 +114,9 @@ int main(int argc, char** argv){
                         printf("Handshake start...\n");
                         srand(time(NULL));
                         EVP_PKEY * priv_key;
-                        EVP_PKEY_CTX * DH_ctx;  //--> Context for Diffi Hellman
+                        EVP_PKEY_CTX * DH_ctx;  //--> Context for Diffie Hellman
                         EVP_PKEY* DH_keys;      // --> Contains both 'a' and 'G^a'
-                        // ricezione chiave pubblica del client (certificato)
+                        // "receive client's certificate"
                         long size = recvMsg(buffer,i);
                         if(size==-1){
                             printf(" - Client certiifcate not received\n");
@@ -127,14 +127,12 @@ int main(int argc, char** argv){
                         }
                         insertFile(buffer, size, i);
                         printf(" - Client certificate received \n");
-
-                        // Invio chiave pubblica server   
                         
                         // Genearation of public/private pair
                         DH_ctx = EVP_PKEY_CTX_new(dh_params, NULL);
                         priv_key = retrieve_privkey("server");
                         DH_keys = NULL;
-                        DH_PubPriv(dh_params, &DH_keys, DH_ctx);   // generazione parametro privato b e pubblic g^b
+                        DH_PubPriv(dh_params, &DH_keys, DH_ctx);   // generation b and g^b
                         printf(" - Private/public pair for DH generated\n");
                         EVP_PKEY_CTX_free(DH_ctx);
                         unsigned char* signature;
@@ -173,10 +171,10 @@ int main(int argc, char** argv){
                              FD_CLR(i, &master);
                              continue;
                         }
-                        // Lettura della chiave pubblica dal BIO
+                        
                         DH_client_keys= PEM_read_bio_PUBKEY(bio, NULL, NULL, NULL);
                         if (!DH_client_keys) {
-                            BIO_free(bio); // Liberare la memoria del BIO
+                            BIO_free(bio); 
                             close(i);
                             FD_CLR(i, &master);
                             continue;
@@ -260,7 +258,7 @@ int main(int argc, char** argv){
                             sessionParam=temp;
                         }
 
-                        //Eliminare b a g^b g^a g^ab
+                        //delete b g^ab
                         free(secret);
                         EVP_PKEY_free(DH_keys);
                         EVP_PKEY_free(DH_client_keys);
@@ -273,7 +271,7 @@ int main(int argc, char** argv){
                     }else if(strcmp(buffer,"REGISTRATION")==0){
                         printf("Registration start...\n");
                         EVP_PKEY * C_pub_key=retrieve_pubkey("server",i);
-                        unsigned char *ciphertext = (unsigned char*)malloc(MAX_LENGTH+US_LENGTH+67 + 16); //--> Credenziali cifrate
+                        unsigned char *ciphertext = (unsigned char*)malloc(MAX_LENGTH+US_LENGTH+67 + 16); 
                         int cipherlen = recvMsg(ciphertext,i);
                         if(cipherlen==-1){
                             printf(" - Ciphertext of client's credentials not received\n");
@@ -308,10 +306,10 @@ int main(int argc, char** argv){
                         }
                         printf(" - Signature Verification on received ciphertext Success \n");
 
-                        //Decifro le credenziali
+                        //Credentials decryption
                         unsigned char * session_key1 = (unsigned char*)malloc(EVP_MD_size(EVP_sha256())); 
                         
-                        //recupero session key
+                        //Session key recover
                         struct secret_Params * temp = sessionParam;
                         while(temp != NULL){
                             if(temp->sd==i){
@@ -353,7 +351,7 @@ int main(int argc, char** argv){
                         char username [US_LENGTH];
                         char email [MAX_LENGTH];
                         unsigned char pswd[65];
-                        // parse del plaintext 
+                        // plaintext parsing
                         sscanf(plaintext,"%s %s",username,email);
                         int start=strlen(username)+strlen(email)+2;
                         int end =start+64;
@@ -447,7 +445,7 @@ int main(int argc, char** argv){
                     }else if(strcmp(buffer,"LOGIN")==0){
                         printf("Starting Login Phase...\n");
                         unsigned char * session_key1 = (unsigned char*)malloc(EVP_MD_size(EVP_sha256())); 
-                        unsigned char * ciphertext = (unsigned char*)malloc(US_LENGTH+64*2+2+16); //--> Credenziali cifrate
+                        unsigned char * ciphertext = (unsigned char*)malloc(US_LENGTH+64*2+2+16);
                         int cipherlen = recvMsg(ciphertext,i);
                         if(cipherlen == -1){
                             strcpy(buffer,"");
@@ -585,6 +583,7 @@ int main(int argc, char** argv){
                             req_nonce++;
                             sprintf(temp_session->nonce,"%d",req_nonce);
                         }else{
+                            strcpy(buffer,"");
                             continue;
                         }
                         //msg=CMD OPERANDS
@@ -644,8 +643,8 @@ int main(int argc, char** argv){
                                 body[j++] = msg[i]; 
                             }
                             body[j] = '\0';
-                            // inserisco il messaggio in bacheca
-                            struct post * temp_post;    // DA METTERE FUORI
+                            // Insert message in the system
+                            struct post * temp_post;    
                             temp_post=malloc(sizeof( struct post));
                             temp_post->mid = message_id++;
                             strcpy(temp_post->title,title);
@@ -695,13 +694,21 @@ int main(int argc, char** argv){
                                 }
                                 temp_post=temp_post->next;
                             }
+                            if (temp_post == NULL){
+                                returns = messageDeliver("NOMID",temp_session->session_key1,temp_session->session_key2,i,req_nonce);
+                                if (returns != -1){
+                                        req_nonce++;
+                                        sprintf(temp_session->nonce,"%d",req_nonce);
+                                        printf("Message delivered correctly.\n");
+                                } else
+                                    printf("Problems delivering message %d\n", mid);
+                            }
                             strcpy(buffer,"");
                         }else if(strncmp(msg,"OUT",3)==0){
                             temp_session->is_logged=false;
                             strcpy(buffer,"");
                             removeSessionParam(i,&sessionParam);
-                        }
-                        else{
+                        }else{
                             strcpy(buffer,"");
                             removeSessionParam(i,&sessionParam);
                             close(i);
