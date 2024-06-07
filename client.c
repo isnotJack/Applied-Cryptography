@@ -532,16 +532,17 @@ int main(int argc, char** argv){
                         char body[500];
                         char add_buffer[547];
                         printf("Adding a new message to the BBS...\n");
-                        while(getchar() !='\n');
                         printf("Title:\n");
+                        while(getchar() !='\n');
                         fgets(title, sizeof(title), stdin);
+                        while(getchar() !='\n');
                         int len = strlen(title);
                         if (len > 0 && title[len - 1] == '\n') {
                             title[len - 1] = '\0';
                         }
                         // author is in "username"
+                        
                         printf("Body of the message:\n");
-                        while(getchar() !='\n');
                         fgets(body, sizeof(body), stdin);
                         //while(getchar() !='\n');
                         len = strlen(body);
