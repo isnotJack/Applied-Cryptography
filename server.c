@@ -102,7 +102,7 @@ int main(int argc, char** argv){
                 }else{
                     buffer_size = 0;
                     buffer_size=recvMsg(buffer,i);  // receive of a message through socket i
-                    //printf("Buffer size: %d\n", buffer_size);
+                    printf("Buffer size: %d\n", buffer_size);
                     if(buffer_size<=0){
                         close(i);
                         FD_CLR(i, &master);
