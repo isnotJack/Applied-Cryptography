@@ -532,8 +532,9 @@ int main(int argc, char** argv){
                         if(temp_client ==NULL){
                             printf(" - User not found or password not correct\n");
                             strcpy(buffer,"");
-                            close(i);
-                            FD_CLR(i,&master);
+                            sendMsg("FAILED",i,7);
+                            // close(i);
+                            // FD_CLR(i,&master);
                             continue;
                         }
                         unsigned char HP_buf[64+US_LENGTH+1]; 
@@ -699,6 +700,13 @@ int main(int argc, char** argv){
                             temp_session->is_logged=false;
                             strcpy(buffer,"");
                             removeSessionParam(i,&sessionParam);
+                        }
+                        else{
+                            strcpy(buffer,"");
+                            removeSessionParam(i,&sessionParam);
+                            close(i);
+                            FD_CLR(i,&master);
+                            continue;
                         }
                     }
                 }
