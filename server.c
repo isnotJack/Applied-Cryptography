@@ -4,6 +4,7 @@ EVP_PKEY * dh_params;
 struct client {
     char *username;
     char *email ;
+    int salt;
     unsigned char * pswdHash;
     struct client * next;
 };
@@ -113,6 +114,10 @@ int main(int argc, char** argv){
                     if(strcmp(buffer,"HANDSHAKE")==0){
                         printf("Handshake start...\n");
                         srand(time(NULL));
+                        int random_nonce=rand();
+                        char rand_buf[11];
+                        sprintf(rand_buf,"%d",random_nonce);
+                        sendMsg(rand_buf,i,strlen(rand_buf));
                         EVP_PKEY * priv_key;
                         EVP_PKEY_CTX * DH_ctx;  //--> Context for Diffie Hellman
                         EVP_PKEY* DH_keys;      // --> Contains both 'a' and 'G^a'
@@ -425,11 +430,12 @@ int main(int argc, char** argv){
                                     FD_CLR(i, &master);
                                     continue;
                                 }
+                                int salt= rand();
                                 app=malloc(sizeof(struct client));
                                 app->username = strdup(username);         
                                 app->pswdHash = strdup(pswd);     
                                 app->email = strdup(email);
-                                
+                                app->salt = salt;
                                 if(users == NULL){
                                     app->next=NULL;
                                 }else{
@@ -707,7 +713,7 @@ int main(int argc, char** argv){
                         }else if(strncmp(msg,"OUT",3)==0){
                             temp_session->is_logged=false;
                             strcpy(buffer,"");
-                            removeSessionParam(i,&sessionParam);
+                            //removeSessionParam(i,&sessionParam);
                         }else{
                             strcpy(buffer,"");
                             removeSessionParam(i,&sessionParam);
