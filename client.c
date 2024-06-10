@@ -41,6 +41,8 @@ void handshake(char * username,int sd,unsigned char* session_key1,int key1_len,c
         close(sd);
         exit(1);
     }
+    char random_buf[11];
+    ret = recvMsg(random_buf,sd);
     if (!send_public_key(sd, pubkey)){            // "sending certificate"
         printf(" - Error sending RSA public key\n");
         close(sd);
